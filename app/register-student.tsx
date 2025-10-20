@@ -1,8 +1,14 @@
+// ...existing code...
 import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
+// Firebase
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { auth, db } from '../src/firebase/firebase';
 
 declare global {
   interface Window {
@@ -18,12 +24,13 @@ const RegisterStudentScreen = () => {
   const googleDivRef = useRef(null);
   const router = useRouter();
 
-  // Expo Auth Session para Android
+  // Expo Auth Session para Android/iOS
   const [request, response, promptAsync] = Google.useAuthRequest({
     clientId: '496117929623-iq56rq8c0ipog1rgjc6hb48fg7tpv8pr.apps.googleusercontent.com',
     androidClientId: '496117929623-j0049lr9u9smvv233aos6781gbg8vm1r.apps.googleusercontent.com',
     webClientId: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
   });
+ 
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -43,8 +50,31 @@ const RegisterStudentScreen = () => {
       if (window.google && googleDivRef.current) {
         window.google.accounts.id.initialize({
           client_id: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-          callback: (response: any) => {
-            console.log('Google response:', response);
+          callback: async (response: any) => {
+            try {
+              const idToken = response?.credential;
+              if (!idToken) {
+                console.log('No idToken from Google web callback');
+                return;
+              }
+              // Sign in with Firebase using the Google ID token
+              const credential = GoogleAuthProvider.credential(idToken);
+              const userCred = await signInWithCredential(auth, credential);
+              const user = userCred.user;
+              // Guardar/actualizar documento del usuario en Firestore
+              await setDoc(doc(db, 'users', user.uid), {
+                email: user.email,
+                displayName: user.displayName || null,
+                provider: 'google',
+                createdAt: serverTimestamp(),
+              }, { merge: true });
+              console.log('Usuario Google autenticado:', user.uid);
+              // navegar o mostrar pantalla siguiente
+              // router.push('/home');
+            } catch (err: any) {
+              console.error('Google web sign-in error', err);
+              Alert.alert('Error', err.message || 'Error al autenticar con Google');
+            }
           },
         });
         window.google.accounts.id.renderButton(googleDivRef.current, {
@@ -58,12 +88,34 @@ const RegisterStudentScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (response?.type === 'success') {
-      // Aquí recibes el token y puedes autenticar al usuario
-      const { authentication } = response;
-      console.log('Google Auth response:', authentication);
-      // Puedes navegar o guardar el usuario aquí
-    }
+    // Mobile / Expo response handling
+    (async () => {
+      if (response?.type === 'success') {
+        try {
+          const { authentication } = response;
+          const idToken = authentication?.idToken;
+          const accessToken = authentication?.accessToken;
+          if (!idToken && !accessToken) {
+            Alert.alert('Error', 'No se recibió token de Google');
+            return;
+          }
+          const credential = GoogleAuthProvider.credential(idToken ?? null, accessToken ?? null);
+          const userCred = await signInWithCredential(auth, credential);
+          const user = userCred.user;
+          await setDoc(doc(db, 'users', user.uid), {
+            email: user.email,
+            displayName: user.displayName || null,
+            provider: 'google',
+            createdAt: serverTimestamp(),
+          }, { merge: true });
+          console.log('Usuario Google autenticado (mobile):', user.uid);
+          // router.push('/home');
+        } catch (err: any) {
+          console.error('Google mobile sign-in error', err);
+          Alert.alert('Error', err.message || 'Error al autenticar con Google');
+        }
+      }
+    })();
   }, [response]);
 
   const isValidEmail = (email: string) =>
@@ -75,12 +127,25 @@ const RegisterStudentScreen = () => {
       return;
     }
     setLoading(true);
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setLoading(false);
-    router.push({
-      pathname: '/verify-code',
-      params: { email, code }
-    });
+    try {
+      const code = Math.floor(1000 + Math.random() * 9000).toString();
+      // Guardar verificación en Firestore
+      await addDoc(collection(db, 'email_verifications'), {
+        email,
+        code,
+        createdAt: serverTimestamp(),
+        used: false,
+      });
+      setLoading(false);
+      router.push({
+        pathname: '/verify-code',
+        params: { email, code }
+      });
+    } catch (err: any) {
+      setLoading(false);
+      console.error('Error guardando verificación', err);
+      Alert.alert('Error', err.message || 'No se pudo guardar la verificación');
+    }
   };
 
   return (
@@ -126,8 +191,8 @@ const RegisterStudentScreen = () => {
   );
 };
 
+// ...existing styles...
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: '#fff',
