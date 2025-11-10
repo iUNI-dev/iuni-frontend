@@ -1,20 +1,20 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
-// Rellena con los valores de tu proyecto Firebase
 const firebaseConfig = {
-  apiKey: 'AIzaSyBN71lSiP7zdQmAcGXP3rTpA5ClW20IaUs',
-  authDomain: 'iuni-backend.firebaseapp.com',
-  projectId: 'iuni-backend',
-  storageBucket: 'iuni-backend.firebasestorage.app',
-  messagingSenderId: '389029036547',
-  appId: '1:389029036547:web:7825a48cbc4ac674d78436',
-  measurementId: 'G-SXXEV87EL4',
+  apiKey: 'AIzaSyBCdqpKuVAita7PrpHuO_H2WwoWuvUS6kY',
+  authDomain: 'iuni-8173c.firebaseapp.com',
+  projectId: 'iuni-8173c',
+  storageBucket: 'iuni-8173c.firebasestorage.app',
+  messagingSenderId: '86494611395',
+  appId: '1:86494611395:web:356f1b5a999f5961c15f76',
+  measurementId: 'G-7PBYH6XK6J',
 };
 
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
 export default app;
