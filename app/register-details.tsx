@@ -1,134 +1,174 @@
-// ...existing code...
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
-import { db } from '../src/firebase/firebase';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import {
+  ActivityIndicator,
+  Alert,
+  Button,
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
+import { auth, db, storage } from '../src/firebase/firebase';
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 
-type FormData = {
+type FormState = {
   nombres: string;
   apellidos: string;
-  edad: string;
-  fechaNacimiento: string;
-  carrera: string;
-  pais: string;
-  ciudad: string;
-  transporte: string;
-  descripcion: string;
-  experiencia: string;
-  lenguajes: string;
-  telefono: string;
-  habilidadesBlandas: string;
-  habilidadesTecnicas: string;
-  disponibilidadViajar: string;
+  email: string;
+  password: string;
+  puestoDeseado: string;
+  departamento: string;
 };
 
-const RegisterDetails = () => {
+const RegisterDetails: React.FC = () => {
   const router = useRouter();
   const params = useLocalSearchParams() as { email?: string };
-  const emailParam = params?.email ? String(params.email) : undefined; // aseguramos string
+  const emailParam = params?.email ? String(params.email) : '';
 
-  const [loading, setLoading] = useState(false);
-
-  const [formData, setFormData] = useState<FormData>({
+  const [form, setForm] = useState<FormState>({
     nombres: '',
     apellidos: '',
-    edad: '',
-    fechaNacimiento: '',
-    carrera: '',
-    pais: '',
-    ciudad: '',
-    transporte: '',
-    descripcion: '',
-    experiencia: '',
-    lenguajes: '',
-    telefono: '',
-    habilidadesBlandas: '',
-    habilidadesTecnicas: '',
-    disponibilidadViajar: '',
+    email: emailParam || '',
+    password: '',
+    puestoDeseado: '',
+    departamento: '',
   });
 
-  const handleChange = (field: keyof FormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const [captchaOk, setCaptchaOk] = useState(false); // placeholder
+  const [loading, setLoading] = useState(false);
+  const [cvFile, setCvFile] = useState<{ uri: string; name: string } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  const handleChange = (key: keyof FormState, value: string) => {
+    setForm((s) => ({ ...s, [key]: value }));
+  };
+
+  const pickCv = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (res.type === 'success') {
+        setCvFile({ uri: res.uri, name: res.name || `cv-${Date.now()}` });
+      }
+    } catch (err) {
+      console.error('DocumentPicker error', err);
+      Alert.alert('Error', 'No se pudo seleccionar el archivo.');
+    }
+  };
+
+  const uploadCvToStorage = async (docId: string) => {
+    if (!cvFile) return null;
+    const response = await fetch(cvFile.uri);
+    const blob = await response.blob();
+    const filename = `${docId}_cv_${Date.now()}_${cvFile.name}`;
+    const storageRef = ref(storage, `cvs/${filename}`);
+    return new Promise<string>((resolve, reject) => {
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.round(prog));
+        },
+        (error) => {
+          console.error('Upload error', error);
+          reject(error);
+        },
+        async () => {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(url);
+        }
+      );
+    });
   };
 
   const handleSubmit = async () => {
-    if (!emailParam) {
-      Alert.alert('Error', 'No se encontró el correo del usuario.');
+    if (!form.nombres.trim() || !form.apellidos.trim() || !form.email.trim() || !form.password.trim()) {
+      Alert.alert('Campos requeridos', 'Completa nombre, apellido, email y contraseña.');
       return;
     }
-
-    // Validación mínima: nombres y apellidos
-    if (!formData.nombres.trim() || !formData.apellidos.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tus nombres y apellidos.');
+    if (!captchaOk) {
+      Alert.alert('Validación', 'Por favor confirma que no eres un robot (captcha).');
       return;
     }
 
     setLoading(true);
     try {
-      // Usar email en minúsculas como id (opcional: puedes usar uid si lo tienes)
-      const docId = emailParam.toLowerCase();
+      // usar uid si el usuario está autenticado, sino usar email lowercase
+      const currentUid = auth.currentUser?.uid;
+      const docId = currentUid || form.email.toLowerCase();
 
-      await setDoc(doc(db, 'users', docId), {
-        email: emailParam,
-        ...formData,
+      let cvUrl = null;
+      if (cvFile) {
+        cvUrl = await uploadCvToStorage(docId);
+      }
+
+      const payload = {
+        nombres: form.nombres,
+        apellidos: form.apellidos,
+        email: form.email.toLowerCase(),
+        puestoDeseado: form.puestoDeseado || null,
+        departamento: form.departamento || null,
+        cvUrl: cvUrl || null,
         createdAt: serverTimestamp(),
-      }, { merge: true });
+        updatedAt: serverTimestamp(),
+        telefono: null,
+        fechaNacimiento: null,
+        documentoIdentidad: null,
+        pais: null,
+        ciudad: null,
+        carrera: null,
+        descripcion: null,
+        disponibilidadViajar: null,
+        idiomas: null,
+      };
 
-      Alert.alert('Datos guardados', 'Tu información fue registrada correctamente.');
-      router.push('/login'); // Redirige a la pantalla de inicio de sesión
+      await setDoc(doc(db, 'users', docId), payload, { merge: true });
+
+      Alert.alert('Guardado', 'Tus datos iniciales fueron guardados. Ahora completa la información adicional.');
+      // redirigir a siguiente pantalla de detalles (puede ser la misma /register-details-info o recargar esta)
+      router.push(`/register-details-info?email=${encodeURIComponent(form.email)}`);
     } catch (err: any) {
-      console.error('Error al guardar datos:', err);
-      Alert.alert('Error', err?.message || 'No se pudo guardar la información.');
+      console.error('save profile error', err);
+      Alert.alert('Error', err.message || 'No se pudo guardar la información.');
     } finally {
       setLoading(false);
+      setUploadProgress(null);
     }
   };
 
-  const fields: { key: keyof FormData; label: string }[] = [
-    { key: 'nombres', label: 'Nombres' },
-    { key: 'apellidos', label: 'Apellidos' },
-    { key: 'edad', label: 'Edad' },
-    { key: 'fechaNacimiento', label: 'Fecha de nacimiento (DD/MM/AAAA)' },
-    { key: 'carrera', label: 'Carrera' },
-    { key: 'pais', label: 'País' },
-    { key: 'ciudad', label: 'Ciudad' },
-    { key: 'transporte', label: 'Transporte' },
-    { key: 'descripcion', label: 'Descripción' },
-    { key: 'experiencia', label: 'Experiencia' },
-    { key: 'lenguajes', label: 'Lenguajes' },
-    { key: 'telefono', label: 'Teléfono' },
-    { key: 'habilidadesBlandas', label: 'Habilidades blandas' },
-    { key: 'habilidadesTecnicas', label: 'Habilidades técnicas' },
-    { key: 'disponibilidadViajar', label: 'Disponibilidad para viajar' },
-  ];
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Completa tu información</Text>
+      <Image source={require('../assets/images/logo-texto.png')} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.title}>Registro - Datos iniciales</Text>
 
-      {fields.map(({ key, label }) => (
-        <TextInput
-          key={key}
-          style={[styles.input, (key === 'descripcion' || key === 'experiencia') && { height: 100, textAlignVertical: 'top' }]}
-          placeholder={label}
-          placeholderTextColor="#888"
-          value={formData[key]}
-          onChangeText={(text) => handleChange(key, text)}
-          multiline={key === 'descripcion' || key === 'experiencia'}
-        />
-      ))}
+      <TextInput style={styles.input} placeholder="Nombres" value={form.nombres} onChangeText={(t) => handleChange('nombres', t)} />
+      <TextInput style={styles.input} placeholder="Apellidos" value={form.apellidos} onChangeText={(t) => handleChange('apellidos', t)} />
+      <TextInput style={styles.input} placeholder="Email" value={form.email} onChangeText={(t) => handleChange('email', t)} keyboardType="email-address" autoCapitalize="none" />
+      <TextInput style={styles.input} placeholder="Contraseña" value={form.password} onChangeText={(t) => handleChange('password', t)} secureTextEntry />
 
-      <TouchableOpacity
-        style={styles.saveButton}
-        onPress={handleSubmit}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.saveButtonText}>Guardar y continuar</Text>
-        )}
+      <TextInput style={styles.input} placeholder="Puesto de trabajo deseado" value={form.puestoDeseado} onChangeText={(t) => handleChange('puestoDeseado', t)} />
+      <TextInput style={styles.input} placeholder="Departamento" value={form.departamento} onChangeText={(t) => handleChange('departamento', t)} />
+
+      <View style={styles.row}>
+        <Text>No soy un robot</Text>
+        <Switch value={captchaOk} onValueChange={setCaptchaOk} />
+      </View>
+
+      <View style={{ width: '100%', maxWidth: 320, marginTop: 8 }}>
+        <Button title={cvFile ? `CV: ${cvFile.name}` : 'Subir Currículum (CV)'} onPress={pickCv} />
+        {uploadProgress !== null && <Text style={{ marginTop: 8 }}>Progreso: {uploadProgress}%</Text>}
+      </View>
+
+      <TouchableOpacity style={styles.saveButton} onPress={handleSubmit} disabled={loading}>
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Siguiente</Text>}
       </TouchableOpacity>
     </ScrollView>
   );
@@ -136,22 +176,24 @@ const RegisterDetails = () => {
 
 export default RegisterDetails;
 
-// ------------------ Estilos ------------------
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingVertical: 30,
   },
+  logo: {
+    width: 300,
+    height: 100,
+    marginBottom: 12,
+  },
   title: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#d90429',
-    marginBottom: 24,
-    textAlign: 'center',
+    marginBottom: 12,
   },
   input: {
     width: '100%',
@@ -161,9 +203,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginBottom: 14,
+    marginBottom: 12,
     backgroundColor: '#fff',
     color: '#000',
+  },
+  row: {
+    width: '100%',
+    maxWidth: 320,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   saveButton: {
     width: '100%',
@@ -173,11 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 18,
   },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  saveButtonText: { color: '#fff', fontWeight: '700' },
 });

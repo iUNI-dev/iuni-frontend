@@ -6,7 +6,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithCredential,
-  signInWithEmailAndPassword
+  fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import {
   addDoc,
@@ -180,18 +180,24 @@ const RegisterStudents = () => {
 
     setLoading(true);
     try {
-      // Primero intentar iniciar sesión por si ya existe
-      try {
-        await signInWithEmailAndPassword(auth, email, 'temp_password');
-        Alert.alert('¡Bienvenido de nuevo!', 'Serás redirigido a tu cuenta.');
-        return;
-      } catch (signInError: any) {
-        if (signInError.code !== 'auth/user-not-found') {
-          throw signInError;
+      // Consultar métodos de inicio de sesión para este email
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+
+      if (methods && methods.length > 0) {
+        if (methods.includes('password')) {
+          Alert.alert('Cuenta existente', 'Este correo ya tiene una cuenta. Intenta iniciar sesión con tu contraseña.');
+          return;
         }
+        if (methods.includes('google.com')) {
+          Alert.alert('Cuenta con Google', 'Este correo está registrado con Google. Usa "Ingresar con Google" para entrar.');
+          return;
+        }
+        // Otros proveedores (facebook, etc.)
+        Alert.alert('Cuenta existente', `Este correo ya está registrado con: ${methods.join(', ')}`);
+        return;
       }
 
-      // Crear nuevo usuario con password temporal
+      // No existe: crear nuevo usuario con password temporal (si necesitas crear uno)
       const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
       const userCredential = await createUserWithEmailAndPassword(
         auth,
