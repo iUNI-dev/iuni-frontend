@@ -1,22 +1,227 @@
+import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import {
+  GoogleAuthProvider,
+  fetchSignInMethodsForEmail,
+  signInWithCredential,
+  signInWithEmailAndPassword
+} from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
+} from 'react-native';
+import { auth, db } from '../src/firebase/firebase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const googleDivRef = useRef<any>(null);
+
+  // Configuración de Google Auth
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    androidClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    iosClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    scopes: ['openid', 'profile', 'email'],
+  });
 
   // Responsive sizes
   const isWide = width > 700;
   const isWeb = Platform.OS === 'web';
   const formWidth = isWide ? 420 : '90%';
-  const imageSize = isWide ? 380 : 160; // Más grande en web
+  const imageSize = isWide ? 380 : 160;
 
-  const handleLogin = () => {
-    console.log('Email:', email, 'Password:', password);
+  // 🔹 Manejar respuesta de Google
+  useEffect(() => {
+    if (response?.type === 'success') {
+      handleGoogleSignIn(response);
+    }
+  }, [response]);
+
+  // 🔹 Inicio de sesión con Google
+  const handleGoogleSignIn = async (response: any) => {
+    setGoogleLoading(true);
+    setErrorMessage('');
+    try {
+      const { id_token } = response.params;
+      
+      if (!id_token) {
+        throw new Error('No se recibió token de Google');
+      }
+
+      const credential = GoogleAuthProvider.credential(id_token);
+      const userCred = await signInWithCredential(auth, credential);
+      const user = userCred.user;
+
+      console.log('✅ Login con Google exitoso:', user.email);
+
+      // Actualizar último login en Firestore
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLogin: serverTimestamp(),
+      });
+
+      // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
+      redirectUserAfterLogin(user.uid, user.email);
+
+    } catch (err: any) {
+      console.error('❌ Error en login con Google:', err);
+      setErrorMessage('No se pudo iniciar sesión con Google');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
+
+  // 🔹 Función para redirigir después del login
+  const redirectUserAfterLogin = async (userId: string, userEmail: string | null) => {
+    try {
+      const studentDoc = await getDoc(doc(db, 'students', userId));
+      
+      if (studentDoc.exists()) {
+        const studentData = studentDoc.data();
+        if (studentData.perfilCompletado) {
+          console.log('🔹 Perfil completo, redirigiendo a home...');
+          router.replace('/home');
+        } else {
+          console.log('🔹 Perfil incompleto, redirigiendo a student-profile...');
+          router.replace(`/student-profile?email=${encodeURIComponent(userEmail || '')}`);
+        }
+      } else {
+        console.log('🔹 No tiene perfil de estudiante, redirigiendo a register-details...');
+        router.replace(`/register-details?email=${encodeURIComponent(userEmail || '')}&provider=google`);
+      }
+    } catch (error) {
+      console.error('Error verificando perfil:', error);
+      // Si hay error, redirigir a home por defecto
+      router.replace('/home');
+    }
+  };
+
+  // 🔹 Inicio de sesión con email/password
+  const handleEmailLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setErrorMessage('Por favor ingresa email y contraseña');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      // Primero verificar los métodos de inicio de sesión del email
+      const methods = await fetchSignInMethodsForEmail(auth, email);
+      
+      if (methods.includes('google.com')) {
+        setErrorMessage('Este email está registrado con Google. Usa "Ingresar con Google"');
+        return;
+      }
+
+      // Intentar inicio de sesión con email/password
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      console.log('✅ Login con email exitoso:', user.email);
+
+      // Actualizar último login
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLogin: serverTimestamp(),
+      });
+
+      // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
+      redirectUserAfterLogin(user.uid, user.email);
+
+    } catch (err: any) {
+      console.error('❌ Error en login:', err);
+      
+      if (err.code === 'auth/user-not-found') {
+        setErrorMessage('No existe una cuenta con este email');
+      } else if (err.code === 'auth/wrong-password') {
+        setErrorMessage('Contraseña incorrecta');
+      } else if (err.code === 'auth/invalid-email') {
+        setErrorMessage('Email inválido');
+      } else if (err.code === 'auth/invalid-credential') {
+        setErrorMessage('Credenciales inválidas');
+      } else {
+        setErrorMessage('Error al iniciar sesión');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔹 Google Button para Web (SIMPLIFICADO)
+  useEffect(() => {
+    if (Platform.OS === 'web' && googleDivRef.current) {
+      const initializeGoogleAuth = () => {
+        if (window.google && googleDivRef.current) {
+          window.google.accounts.id.initialize({
+            client_id: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+            callback: async (response: any) => {
+              setGoogleLoading(true);
+              setErrorMessage('');
+              try {
+                const idToken = response?.credential;
+                if (!idToken) throw new Error('No idToken from Google');
+                
+                const credential = GoogleAuthProvider.credential(idToken);
+                const userCred = await signInWithCredential(auth, credential);
+                
+                // Actualizar último login
+                await updateDoc(doc(db, 'users', userCred.user.uid), {
+                  lastLogin: serverTimestamp(),
+                });
+
+                // 🔹 REDIRECCIÓN DIRECTA
+                redirectUserAfterLogin(userCred.user.uid, userCred.user.email);
+
+              } catch (err: any) {
+                console.error('Google web sign-in error', err);
+                setErrorMessage('Error al autenticar con Google');
+              } finally {
+                setGoogleLoading(false);
+              }
+            },
+            ux_mode: 'popup',
+          });
+
+          window.google.accounts.id.renderButton(googleDivRef.current, {
+            theme: 'filled_blue',
+            size: 'large',
+            text: 'signin_with',
+            shape: 'pill',
+            width: 320,
+          });
+        }
+      };
+
+      if (!document.getElementById('google-login-script')) {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.id = 'google-login-script';
+        script.onload = initializeGoogleAuth;
+        document.body.appendChild(script);
+      } else {
+        initializeGoogleAuth();
+      }
+    }
+  }, []);
 
   return (
     <View style={[styles.mainContainer, { flexDirection: isWide ? 'row' : 'column' }]}>
@@ -46,6 +251,35 @@ const LoginScreen = () => {
         <View style={[styles.formContainer, { width: formWidth, maxWidth: isWide ? 420 : 340 }]}>
           <Text style={styles.title}>iUNI - Bolsa de Empleo</Text>
 
+          {/* Mensaje de error */}
+          {errorMessage ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* Botón de Google */}
+          {Platform.OS === 'web' ? (
+            <View style={styles.googleButtonContainer}>
+              <View ref={googleDivRef} style={styles.googleButtonWeb} />
+              {googleLoading && <ActivityIndicator style={styles.googleLoader} />}
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
+              onPress={() => promptAsync()}
+              disabled={googleLoading || !request}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.googleButtonText}>Ingresar con Google</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          <Text style={styles.orText}>o ingresa con tu email</Text>
+
           <TextInput
             style={styles.input}
             placeholder="Correo electrónico"
@@ -65,11 +299,19 @@ const LoginScreen = () => {
             secureTextEntry
           />
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Iniciar Sesión</Text>
+          <TouchableOpacity 
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleEmailLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Iniciar Sesión</Text>
+            )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.push('/register')}>
+          <TouchableOpacity onPress={() => router.push('/register-student')}>
             <Text style={styles.link}>¿No tienes cuenta? Regístrate aquí</Text>
           </TouchableOpacity>
         </View>
@@ -124,7 +366,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.10,
     shadowRadius: 8,
     elevation: 6,
-    maxWidth: 340, // Este valor se sobreescribe arriba
+    maxWidth: 340,
     minWidth: 220,
   },
   title: {
@@ -159,11 +401,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
   link: {
     color: '#d90429',
     textAlign: 'center',
     fontSize: 14,
     marginTop: 8,
+  },
+  googleButton: {
+    width: '100%',
+    height: 44,
+    backgroundColor: '#4285F4',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  googleButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  googleButtonContainer: {
+    width: '100%',
+    marginBottom: 16,
+    position: 'relative',
+    alignItems: 'center',
+  },
+  googleButtonWeb: {
+    width: 320,
+    height: 44,
+  },
+  googleLoader: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginLeft: -10,
+    marginTop: -10,
+  },
+  orText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+    width: '100%',
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderColor: '#f44336',
+    borderWidth: 1,
+    width: '100%',
+  },
+  errorText: {
+    color: '#d32f2f',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 

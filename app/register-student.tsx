@@ -1,20 +1,19 @@
 import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import {
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
   GoogleAuthProvider,
-  signInWithCredential,
-  fetchSignInMethodsForEmail
+  signInWithCredential
 } from 'firebase/auth';
 import {
   addDoc,
   collection,
   doc,
+  getDoc,
   serverTimestamp,
-  setDoc,
-  getDoc
+  setDoc
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -36,32 +35,24 @@ const RegisterStudents = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [originError, setOriginError] = useState(false);
   const googleDivRef = useRef<any>(null);
   const router = useRouter();
 
-  // Redirect URI (usa proxy en Expo Go)
-  const redirectUri = makeRedirectUri({ useProxy: true });
-
-  // Configuración de Google Auth: incluir scopes y redirectUri/responseType
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-    androidClientId: '496117929623-j0049lr9u9smvv233aos6781gbg8vm1r.apps.googleusercontent.com',
-    iosClientId: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-    redirectUri,
-    scopes: ['profile', 'email'],
-    responseType: 'id_token',
+    webClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    androidClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    iosClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    scopes: ['openid', 'profile', 'email'],
   });
 
-  // Validar formato de correo
-  const isValidEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
-
-  // Guarda/actualiza usuario en Firestore
+  // 🔹 FUNCIÓN SIMPLIFICADA - REDIRECCIÓN DIRECTA
   const handleGoogleUser = async (user: any) => {
     try {
-      // Verificar si el usuario ya existe en Firestore
       const userDoc = await getDoc(doc(db, 'users', user.uid));
 
       if (!userDoc.exists()) {
+        // NUEVO USUARIO: Guardar y redirigir inmediatamente
         await setDoc(
           doc(db, 'users', user.uid),
           {
@@ -71,11 +62,18 @@ const RegisterStudents = () => {
             provider: 'google',
             createdAt: serverTimestamp(),
             lastLogin: serverTimestamp(),
+            registrationComplete: false,
           },
           { merge: true }
         );
-        console.log('Nuevo usuario de Google guardado en Firestore');
+
+        console.log('🔹 NUEVO USUARIO GOOGLE - Redirigiendo a register-details...');
+        
+        // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
+        router.push(`/register-details?email=${encodeURIComponent(user.email)}&provider=google`);
+        
       } else {
+        // USUARIO EXISTENTE
         await setDoc(
           doc(db, 'users', user.uid),
           {
@@ -83,12 +81,14 @@ const RegisterStudents = () => {
           },
           { merge: true }
         );
+
+        console.log('🔹 USUARIO EXISTENTE - Login exitoso');
+        // Redirigir a home o dashboard
+        router.push('/home');
       }
 
-      Alert.alert('¡Bienvenido!', `Hola ${user.displayName || user.email}`);
-      // router.push('/home');
     } catch (err: any) {
-      console.error('Error guardando usuario de Google:', err);
+      console.error('❌ Error guardando usuario de Google:', err);
       Alert.alert('Error', 'Error al guardar información del usuario');
     }
   };
@@ -98,32 +98,44 @@ const RegisterStudents = () => {
     if (Platform.OS === 'web') {
       const initializeGoogleAuth = () => {
         if (window.google && googleDivRef.current) {
-          window.google.accounts.id.initialize({
-            client_id: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-            callback: async (response: any) => {
-              setGoogleLoading(true);
-              try {
-                const idToken = response?.credential;
-                if (!idToken) throw new Error('No idToken from Google web callback');
-                const credential = GoogleAuthProvider.credential(idToken);
-                const userCred = await signInWithCredential(auth, credential);
-                await handleGoogleUser(userCred.user);
-              } catch (err: any) {
-                console.error('Google web sign-in error', err);
-                Alert.alert('Error', err.message || 'Error al autenticar con Google');
-              } finally {
-                setGoogleLoading(false);
-              }
-            },
-          });
+          try {
+            window.google.accounts.id.initialize({
+              client_id: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+              callback: async (response: any) => {
+                setGoogleLoading(true);
+                try {
+                  const idToken = response?.credential;
+                  if (!idToken) throw new Error('No idToken from Google web callback');
+                  
+                  const credential = GoogleAuthProvider.credential(idToken);
+                  const userCred = await signInWithCredential(auth, credential);
+                  
+                  // 🔹 USAR LA FUNCIÓN SIMPLIFICADA
+                  await handleGoogleUser(userCred.user);
+                  
+                } catch (err: any) {
+                  console.error('❌ Google web sign-in error', err);
+                  Alert.alert('Error', err.message || 'Error al autenticar con Google');
+                } finally {
+                  setGoogleLoading(false);
+                }
+              },
+              ux_mode: 'popup',
+            });
 
-          // render button into the div
-          window.google.accounts.id.renderButton(googleDivRef.current, {
-            theme: 'filled_red',
-            size: 'large',
-            text: 'continue_with',
-            shape: 'pill',
-          });
+            window.google.accounts.id.renderButton(googleDivRef.current, {
+              theme: 'filled_red',
+              size: 'large',
+              text: 'continue_with',
+              shape: 'pill',
+              width: 320,
+            });
+
+            setOriginError(false);
+          } catch (error) {
+            console.error('❌ Error initializing Google Auth:', error);
+            setOriginError(true);
+          }
         }
       };
 
@@ -134,6 +146,10 @@ const RegisterStudents = () => {
         script.defer = true;
         script.id = 'google-client-script';
         script.onload = initializeGoogleAuth;
+        script.onerror = () => {
+          console.error('❌ Failed to load Google script');
+          setOriginError(true);
+        };
         document.body.appendChild(script);
       } else {
         initializeGoogleAuth();
@@ -147,22 +163,20 @@ const RegisterStudents = () => {
       (async () => {
         setGoogleLoading(true);
         try {
-          const { authentication } = response;
-          const idToken = authentication?.idToken;
-          const accessToken = authentication?.accessToken;
-
-          if (!idToken && !accessToken) {
-            throw new Error('No se recibieron tokens de Google');
+          const { id_token } = response.params;
+          
+          if (!id_token) {
+            throw new Error('No se recibió id_token de Google');
           }
 
-          // Crea credencial y autentica en Firebase
-          const credential = GoogleAuthProvider.credential(idToken ?? null, accessToken ?? null);
+          const credential = GoogleAuthProvider.credential(id_token);
           const userCred = await signInWithCredential(auth, credential);
-
-          // Guarda/actualiza en Firestore
+          
+          // 🔹 USAR LA FUNCIÓN SIMPLIFICADA
           await handleGoogleUser(userCred.user);
+          
         } catch (err: any) {
-          console.error('Google mobile sign-in error', err);
+          console.error('❌ Google mobile sign-in error', err);
           Alert.alert('Error', err.message || 'Error al autenticar con Google');
         } finally {
           setGoogleLoading(false);
@@ -180,7 +194,6 @@ const RegisterStudents = () => {
 
     setLoading(true);
     try {
-      // Consultar métodos de inicio de sesión para este email
       const methods = await fetchSignInMethodsForEmail(auth, email);
 
       if (methods && methods.length > 0) {
@@ -192,12 +205,10 @@ const RegisterStudents = () => {
           Alert.alert('Cuenta con Google', 'Este correo está registrado con Google. Usa "Ingresar con Google" para entrar.');
           return;
         }
-        // Otros proveedores (facebook, etc.)
         Alert.alert('Cuenta existente', `Este correo ya está registrado con: ${methods.join(', ')}`);
         return;
       }
 
-      // No existe: crear nuevo usuario con password temporal (si necesitas crear uno)
       const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
       const userCredential = await createUserWithEmailAndPassword(
         auth,
@@ -206,15 +217,14 @@ const RegisterStudents = () => {
       );
       const user = userCredential.user;
 
-      // Guardar datos en Firestore
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
         provider: 'email',
         createdAt: serverTimestamp(),
         lastLogin: serverTimestamp(),
+        registrationComplete: false,
       });
 
-      // Generar código de verificación
       const code = Math.floor(1000 + Math.random() * 9000).toString();
       await addDoc(collection(db, 'email_verifications'), {
         email,
@@ -223,11 +233,11 @@ const RegisterStudents = () => {
         used: false,
       });
 
-      Alert.alert('Registro exitoso', 'Tu cuenta fue creada correctamente.');
-      router.push(`/register-details?email=${encodeURIComponent(email)}`);
+      console.log('🔹 REGISTRO CON EMAIL - Redirigiendo a detalles...');
+      router.push(`/register-details?email=${encodeURIComponent(email)}&provider=email`);
       
     } catch (err: any) {
-      console.error('Error completo:', err);
+      console.error('❌ Error completo:', err);
       if (err.code === 'auth/email-already-in-use') {
         Alert.alert('Ya registrado', 'Este correo ya está registrado. Intenta iniciar sesión.');
       } else if (err.code === 'auth/weak-password') {
@@ -242,6 +252,9 @@ const RegisterStudents = () => {
     }
   };
 
+  // Validar formato de correo
+  const isValidEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
+
   // ------------------ UI ------------------
   return (
     <View style={styles.container}>
@@ -254,6 +267,14 @@ const RegisterStudents = () => {
         Ingresa y encuentra cientos de empleos para estudiantes.
       </Text>
 
+      {originError && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            Error de configuración: Verifica los orígenes autorizados en Google Cloud Console
+          </Text>
+        </View>
+      )}
+
       {Platform.OS === 'web' ? (
         <View style={styles.googleButtonContainer}>
           <View ref={googleDivRef} style={styles.googleButtonWeb as any} />
@@ -262,8 +283,7 @@ const RegisterStudents = () => {
       ) : (
         <TouchableOpacity
           style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
-          // Para Expo Go usa el proxy: useProxy: true
-          onPress={() => promptAsync({ useProxy: true })}
+          onPress={() => promptAsync()}
           disabled={googleLoading || !request}
         >
           {googleLoading ? (
@@ -392,5 +412,19 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  errorContainer: {
+    backgroundColor: '#ffebee',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderColor: '#f44336',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#d32f2f',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
