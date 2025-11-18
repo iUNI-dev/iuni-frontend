@@ -41,7 +41,7 @@ const RegisterStudents = () => {
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     webClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
-    androidClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    androidClientId: '86494611395-al3oaiq3tbqngmgpq2vn13vdne7b3sk1.apps.googleusercontent.com',
     iosClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
   });
