@@ -1,15 +1,14 @@
 import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+WebBrowser.maybeCompleteAuthSession();
+
 import {
-  createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
   GoogleAuthProvider,
   signInWithCredential
 } from 'firebase/auth';
 import {
-  addDoc,
-  collection,
   doc,
   getDoc,
   serverTimestamp,
@@ -29,8 +28,6 @@ import {
 } from 'react-native';
 import { auth, db } from '../src/firebase/firebase';
 
-WebBrowser.maybeCompleteAuthSession();
-
 const RegisterStudents = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -40,19 +37,20 @@ const RegisterStudents = () => {
   const router = useRouter();
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
-    androidClientId: '86494611395-al3oaiq3tbqngmgpq2vn13vdne7b3sk1.apps.googleusercontent.com',
-    iosClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    webClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
+    androidClientId: '433398025212-l0a6mffd13nl8aft395ma6c4untalmn6.apps.googleusercontent.com',
+    iosClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
+    redirectUri: 'https://auth.expo.io/@ivan_lopez2025/iuni-expo'
   });
 
-  // 🔹 FUNCIÓN SIMPLIFICADA - REDIRECCIÓN DIRECTA
+  // 🔹 FUNCIÓN PARA USUARIOS DE GOOGLE
   const handleGoogleUser = async (user: any) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
 
       if (!userDoc.exists()) {
-        // NUEVO USUARIO: Guardar y redirigir inmediatamente
+        // NUEVO USUARIO: Guardar datos básicos de Google
         await setDoc(
           doc(db, 'users', user.uid),
           {
@@ -60,31 +58,37 @@ const RegisterStudents = () => {
             displayName: user.displayName || '',
             photoURL: user.photoURL || '',
             provider: 'google',
+            userType: 'student',
+            registrationStep: 1, // Irá a register-details después
+            registrationComplete: false,
             createdAt: serverTimestamp(),
             lastLogin: serverTimestamp(),
-            registrationComplete: false,
           },
           { merge: true }
         );
 
         console.log('🔹 NUEVO USUARIO GOOGLE - Redirigiendo a register-details...');
-        
-        // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
-        router.push(`/register-details?email=${encodeURIComponent(user.email)}&provider=google`);
+        router.replace(`/register-details?email=${encodeURIComponent(user.email || '')}&provider=google`);
         
       } else {
-        // USUARIO EXISTENTE
+        // USUARIO EXISTENTE: Verificar estado del registro
         await setDoc(
           doc(db, 'users', user.uid),
-          {
-            lastLogin: serverTimestamp(),
-          },
+          { lastLogin: serverTimestamp() },
           { merge: true }
         );
 
-        console.log('🔹 USUARIO EXISTENTE - Login exitoso');
-        // Redirigir a home o dashboard
-        router.push('/home');
+        const userData = userDoc.data();
+        
+        // Verificar si tiene perfil completo
+        const studentDoc = await getDoc(doc(db, 'students', user.uid));
+        if (studentDoc.exists() && studentDoc.data().perfilCompletado) {
+          router.replace('/home');
+        } else if (userData.registrationStep === 1) {
+          router.replace(`/register-details?email=${encodeURIComponent(user.email || '')}&provider=google`);
+        } else {
+          router.replace(`/student-profile?email=${encodeURIComponent(user.email || '')}`);
+        }
       }
 
     } catch (err: any) {
@@ -95,12 +99,12 @@ const RegisterStudents = () => {
 
   // ------------------ 🔹 LOGIN CON GOOGLE EN WEB ------------------
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && googleDivRef.current) {
       const initializeGoogleAuth = () => {
         if (window.google && googleDivRef.current) {
           try {
             window.google.accounts.id.initialize({
-              client_id: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+              client_id: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
               callback: async (response: any) => {
                 setGoogleLoading(true);
                 try {
@@ -110,7 +114,6 @@ const RegisterStudents = () => {
                   const credential = GoogleAuthProvider.credential(idToken);
                   const userCred = await signInWithCredential(auth, credential);
                   
-                  // 🔹 USAR LA FUNCIÓN SIMPLIFICADA
                   await handleGoogleUser(userCred.user);
                   
                 } catch (err: any) {
@@ -160,6 +163,8 @@ const RegisterStudents = () => {
   // ------------------ 🔹 LOGIN CON GOOGLE EN MÓVIL ------------------
   useEffect(() => {
     if (response?.type === 'success') {
+      console.log('🔍 Google Auth Success - Processing...');
+      
       (async () => {
         setGoogleLoading(true);
         try {
@@ -169,23 +174,27 @@ const RegisterStudents = () => {
             throw new Error('No se recibió id_token de Google');
           }
 
+          console.log('🔍 Google ID Token received');
           const credential = GoogleAuthProvider.credential(id_token);
           const userCred = await signInWithCredential(auth, credential);
           
-          // 🔹 USAR LA FUNCIÓN SIMPLIFICADA
+          console.log('🔍 Firebase auth successful, user:', userCred.user.email);
           await handleGoogleUser(userCred.user);
           
         } catch (err: any) {
-          console.error('❌ Google mobile sign-in error', err);
+          console.error('❌ Google sign-in error', err);
           Alert.alert('Error', err.message || 'Error al autenticar con Google');
         } finally {
           setGoogleLoading(false);
         }
       })();
+    } else if (response?.type === 'error') {
+      console.error('❌ Google Auth Error:', response.error);
+      Alert.alert('Error', 'No se pudo completar la autenticación con Google');
     }
   }, [response]);
 
-  // ------------------ 🔹 REGISTRO CON CORREO INSTITUCIONAL ------------------
+  // ------------------ 🔹 REGISTRO CON CORREO ------------------
   const handleEmailRegister = async () => {
     if (!isValidEmail(email)) {
       Alert.alert('Correo inválido', 'Por favor ingresa un correo válido.');
@@ -209,50 +218,18 @@ const RegisterStudents = () => {
         return;
       }
 
-      const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email,
-        tempPassword
-      );
-      const user = userCredential.user;
-
-      await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
-        provider: 'email',
-        createdAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-        registrationComplete: false,
-      });
-
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
-      await addDoc(collection(db, 'email_verifications'), {
-        email,
-        code,
-        createdAt: serverTimestamp(),
-        used: false,
-      });
-
-      console.log('🔹 REGISTRO CON EMAIL - Redirigiendo a detalles...');
+      // Si el email está disponible, redirigir a register-details
+      console.log('🔹 EMAIL DISPONIBLE - Redirigiendo a register-details...');
       router.push(`/register-details?email=${encodeURIComponent(email)}&provider=email`);
       
     } catch (err: any) {
-      console.error('❌ Error completo:', err);
-      if (err.code === 'auth/email-already-in-use') {
-        Alert.alert('Ya registrado', 'Este correo ya está registrado. Intenta iniciar sesión.');
-      } else if (err.code === 'auth/weak-password') {
-        Alert.alert('Error', 'La contraseña es demasiado débil.');
-      } else if (err.code === 'auth/invalid-email') {
-        Alert.alert('Correo inválido', 'El formato del correo no es válido.');
-      } else {
-        Alert.alert('Error', err.message || 'No se pudo crear el usuario.');
-      }
+      console.error('❌ Error verificando email:', err);
+      Alert.alert('Error', 'No se pudo verificar el correo electrónico');
     } finally {
       setLoading(false);
     }
   };
 
-  // Validar formato de correo
   const isValidEmail = (email: string) => /\S+@\S+\.\S+/.test(email);
 
   // ------------------ UI ------------------
@@ -263,6 +240,7 @@ const RegisterStudents = () => {
         style={styles.logo}
         resizeMode="contain"
       />
+      
       <Text style={styles.subtitle}>
         Ingresa y encuentra cientos de empleos para estudiantes.
       </Text>
@@ -275,6 +253,7 @@ const RegisterStudents = () => {
         </View>
       )}
 
+      {/* BOTÓN DE GOOGLE */}
       {Platform.OS === 'web' ? (
         <View style={styles.googleButtonContainer}>
           <View ref={googleDivRef} style={styles.googleButtonWeb as any} />
@@ -294,8 +273,9 @@ const RegisterStudents = () => {
         </TouchableOpacity>
       )}
 
-      <Text style={styles.orText}>o ingresa con correo electrónico</Text>
+      <Text style={styles.orText}>o regístrate con correo electrónico</Text>
 
+      {/* FORMULARIO DE EMAIL */}
       <TextInput
         style={styles.input}
         placeholder="Correo electrónico"
@@ -318,6 +298,10 @@ const RegisterStudents = () => {
           <Text style={styles.emailButtonText}>Continuar</Text>
         )}
       </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => router.push('/login')}>
+        <Text style={styles.link}>¿Ya tienes cuenta? Inicia sesión</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -334,16 +318,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logo: {
-    width: 600,
-    height: 200,
+    width: 300,
+    height: 100,
     marginBottom: 28,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#d90429',
+    fontSize: 16,
+    color: '#666',
     textAlign: 'center',
     marginBottom: 32,
-    fontWeight: 'bold',
   },
   googleButtonContainer: {
     position: 'relative',
@@ -362,8 +345,6 @@ const styles = StyleSheet.create({
   googleButtonWeb: {
     width: 320,
     height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   googleLoader: {
     position: 'absolute',
@@ -379,31 +360,32 @@ const styles = StyleSheet.create({
   },
   orText: {
     fontSize: 14,
-    color: '#000',
+    color: '#666',
     marginBottom: 18,
     textAlign: 'center',
   },
   input: {
     width: '100%',
     maxWidth: 320,
-    height: 44,
-    borderColor: '#000',
+    height: 50,
+    borderColor: '#ddd',
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginBottom: 14,
+    marginBottom: 16,
     backgroundColor: '#fff',
     color: '#000',
   },
   emailButton: {
     width: '100%',
     maxWidth: 320,
-    height: 44,
-    backgroundColor: '#000',
+    height: 50,
+    backgroundColor: '#d90429',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 10,
+    marginBottom: 16,
   },
   emailButtonText: {
     color: '#fff',
@@ -426,5 +408,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  link: {
+    color: '#d90429',
+    textAlign: 'center',
+    fontSize: 14,
   },
 });

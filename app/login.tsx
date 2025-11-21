@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   GoogleAuthProvider,
   fetchSignInMethodsForEmail,
+  sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword
 } from 'firebase/auth';
@@ -11,6 +12,7 @@ import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   StyleSheet,
@@ -36,10 +38,11 @@ const LoginScreen = () => {
 
   // Configuración de Google Auth
   const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
-    androidClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
-    iosClientId: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+    webClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
+    androidClientId: '433398025212-l0a6mffd13nl8aft395ma6c4untalmn6.apps.googleusercontent.com',
+    iosClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
     scopes: ['openid', 'profile', 'email'],
+    redirectUri: 'https://auth.expo.io/@ivan_lopez2025/iuni-expo'
   });
 
   // Responsive sizes
@@ -77,7 +80,7 @@ const LoginScreen = () => {
         lastLogin: serverTimestamp(),
       });
 
-      // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
+      // 🔹 REDIRECCIÓN
       redirectUserAfterLogin(user.uid, user.email);
 
     } catch (err: any) {
@@ -91,6 +94,18 @@ const LoginScreen = () => {
   // 🔹 Función para redirigir después del login
   const redirectUserAfterLogin = async (userId: string, userEmail: string | null) => {
     try {
+      // Primero verificar en users
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      
+      if (!userDoc.exists()) {
+        console.log('🔹 Usuario no encontrado en Firestore');
+        router.replace('/register-student');
+        return;
+      }
+
+      const userData = userDoc.data();
+      
+      // Verificar si tiene perfil de estudiante
       const studentDoc = await getDoc(doc(db, 'students', userId));
       
       if (studentDoc.exists()) {
@@ -103,8 +118,14 @@ const LoginScreen = () => {
           router.replace(`/student-profile?email=${encodeURIComponent(userEmail || '')}`);
         }
       } else {
-        console.log('🔹 No tiene perfil de estudiante, redirigiendo a register-details...');
-        router.replace(`/register-details?email=${encodeURIComponent(userEmail || '')}&provider=google`);
+        // No tiene perfil de estudiante, verificar registrationStep
+        if (userData.registrationStep === 1) {
+          console.log('🔹 Paso 1 completado, redirigiendo a register-details...');
+          router.replace(`/register-details?email=${encodeURIComponent(userEmail || '')}&provider=${userData.provider || 'email'}`);
+        } else {
+          console.log('🔹 Registro incompleto, redirigiendo a register-student...');
+          router.replace('/register-student');
+        }
       }
     } catch (error) {
       console.error('Error verificando perfil:', error);
@@ -113,64 +134,119 @@ const LoginScreen = () => {
     }
   };
 
-  // 🔹 Inicio de sesión con email/password
-  const handleEmailLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage('Por favor ingresa email y contraseña');
+  // 🔹 Inicio de sesión con email/password - CORREGIDA
+  // 🔹 Inicio de sesión con email/password - VERSIÓN CORREGIDA
+const handleEmailLogin = async () => {
+  if (!email.trim() || !password.trim()) {
+    setErrorMessage('Por favor ingresa email y contraseña');
+    return;
+  }
+
+  setLoading(true);
+  setErrorMessage('');
+  
+  try {
+    console.log('🔹 Intentando login con:', email);
+    
+    // PRIMERO verificar si el usuario existe y su método de registro
+    let methods: string[] = [];
+    try {
+      methods = await fetchSignInMethodsForEmail(auth, email);
+      console.log('🔹 Métodos de inicio de sesión:', methods);
+    } catch (methodsError: any) {
+      console.log('🔹 Error en fetchSignInMethodsForEmail:', methodsError);
+      // Continuar con el login aunque falle la verificación de métodos
+    }
+    
+    // Si methods está vacío pero sabemos que el usuario existe, intentar login directamente
+    if (methods.length === 0) {
+      console.log('🔹 Métodos vacíos, pero intentando login directo...');
+      // No mostrar error, intentar login directamente
+    } else if (methods.includes('google.com')) {
+      setErrorMessage('Este email está registrado con Google. Usa "Ingresar con Google"');
+      return;
+    } else if (!methods.includes('password')) {
+      setErrorMessage('Este email no tiene contraseña configurada. Usa "Ingresar con Google" o regístrate de nuevo.');
       return;
     }
 
-    setLoading(true);
-    setErrorMessage('');
+    // Intentar inicio de sesión directamente
+    console.log('🔹 Iniciando sesión con email/contraseña...');
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    console.log('✅ Login exitoso:', user.email, 'UID:', user.uid);
+
+    // Actualizar último login
+    await updateDoc(doc(db, 'users', user.uid), {
+      lastLogin: serverTimestamp(),
+    });
+
+    // Redirigir
+    redirectUserAfterLogin(user.uid, user.email);
+
+  } catch (err: any) {
+    console.error('❌ Error completo en login:', err);
+    console.error('❌ Código de error:', err.code);
+    
+    // MANEJO DETALLADO DE ERRORES
+    switch (err.code) {
+      case 'auth/user-not-found':
+        setErrorMessage('No existe una cuenta con este email. Regístrate primero.');
+        break;
+      case 'auth/wrong-password':
+        setErrorMessage('Contraseña incorrecta.');
+        break;
+      case 'auth/invalid-email':
+        setErrorMessage('El formato del email es inválido');
+        break;
+      case 'auth/invalid-credential':
+        // 🔹 ERROR MEJORADO PARA invalid-credential
+        if (email === 'mario@gmail.com') {
+          setErrorMessage('Credenciales inválidas para mario@gmail.com. Verifica la contraseña o intenta restablecerla.');
+        } else {
+          setErrorMessage('Credenciales inválidas. Verifica tu email y contraseña.');
+        }
+        break;
+      case 'auth/too-many-requests':
+        setErrorMessage('Demasiados intentos fallidos. Intenta más tarde o restablece tu contraseña.');
+        break;
+      case 'auth/user-disabled':
+        setErrorMessage('Esta cuenta ha sido deshabilitada.');
+        break;
+      default:
+        setErrorMessage(`Error al iniciar sesión: ${err.message}`);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // 🔹 Función para resetear contraseña
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Ingresa tu email para restablecer contraseña');
+      return;
+    }
+
     try {
-      // Primero verificar los métodos de inicio de sesión del email
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-      
-      if (methods.includes('google.com')) {
-        setErrorMessage('Este email está registrado con Google. Usa "Ingresar con Google"');
-        return;
-      }
-
-      // Intentar inicio de sesión con email/password
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      console.log('✅ Login con email exitoso:', user.email);
-
-      // Actualizar último login
-      await updateDoc(doc(db, 'users', user.uid), {
-        lastLogin: serverTimestamp(),
-      });
-
-      // 🔹 REDIRECCIÓN DIRECTA SIN ALERT
-      redirectUserAfterLogin(user.uid, user.email);
-
-    } catch (err: any) {
-      console.error('❌ Error en login:', err);
-      
-      if (err.code === 'auth/user-not-found') {
-        setErrorMessage('No existe una cuenta con este email');
-      } else if (err.code === 'auth/wrong-password') {
-        setErrorMessage('Contraseña incorrecta');
-      } else if (err.code === 'auth/invalid-email') {
-        setErrorMessage('Email inválido');
-      } else if (err.code === 'auth/invalid-credential') {
-        setErrorMessage('Credenciales inválidas');
-      } else {
-        setErrorMessage('Error al iniciar sesión');
-      }
-    } finally {
-      setLoading(false);
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert(
+        'Email enviado',
+        `Se envió un enlace para restablecer contraseña a ${email}`
+      );
+    } catch (error: any) {
+      setErrorMessage(`Error al enviar email: ${error.message}`);
     }
   };
 
-  // 🔹 Google Button para Web (SIMPLIFICADO)
+  // 🔹 Google Button para Web
   useEffect(() => {
     if (Platform.OS === 'web' && googleDivRef.current) {
       const initializeGoogleAuth = () => {
         if (window.google && googleDivRef.current) {
           window.google.accounts.id.initialize({
-            client_id: '86494611395-eef51jfrj1cohrt6fiut2jjuauae37j7.apps.googleusercontent.com',
+            client_id: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
             callback: async (response: any) => {
               setGoogleLoading(true);
               setErrorMessage('');
@@ -186,7 +262,7 @@ const LoginScreen = () => {
                   lastLogin: serverTimestamp(),
                 });
 
-                // 🔹 REDIRECCIÓN DIRECTA
+                // 🔹 REDIRECCIÓN
                 redirectUserAfterLogin(userCred.user.uid, userCred.user.email);
 
               } catch (err: any) {
@@ -288,6 +364,7 @@ const LoginScreen = () => {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
           />
 
           <TextInput
@@ -297,6 +374,7 @@ const LoginScreen = () => {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            autoComplete="password"
           />
 
           <TouchableOpacity 
@@ -309,6 +387,11 @@ const LoginScreen = () => {
             ) : (
               <Text style={styles.buttonText}>Iniciar Sesión</Text>
             )}
+          </TouchableOpacity>
+
+          {/* Enlace para resetear contraseña */}
+          <TouchableOpacity onPress={handleResetPassword}>
+            <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.push('/register-student')}>
@@ -377,18 +460,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    height: 44,
+    height: 50,
     width: '100%',
-    borderColor: '#000',
+    borderColor: '#ddd',
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginBottom: 12,
+    marginBottom: 16,
     backgroundColor: '#fff',
     color: '#000',
   },
   button: {
-    height: 44,
+    height: 50,
     width: '100%',
     backgroundColor: '#d90429',
     justifyContent: 'center',
@@ -412,7 +495,7 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     width: '100%',
-    height: 44,
+    height: 50,
     backgroundColor: '#4285F4',
     borderRadius: 8,
     justifyContent: 'center',
@@ -432,7 +515,7 @@ const styles = StyleSheet.create({
   },
   googleButtonWeb: {
     width: 320,
-    height: 44,
+    height: 50,
   },
   googleLoader: {
     position: 'absolute',

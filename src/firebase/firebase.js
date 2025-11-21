@@ -1,22 +1,24 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
+// 🔥 USA ESTA CONFIGURACIÓN EXACTA:
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyBCdqpKuVAita7PrpHuO_H2WwoWuvUS6kY',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'iuni-8173c.firebaseapp.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'iuni-8173c',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'iuni-8173c.appspot.com',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '86494611395',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:86494611395:web:356f1b5a999f5961c15f76',
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || 'G-7PBYH6XK6J',
+  apiKey: "AIzaSyC1x48wCmoCAjumE4wJ2_KADXfTrfrY3bU",
+  authDomain: "iuni-8173c.firebaseapp.com",
+  projectId: "iuni-8173c",
+  storageBucket: "iuni-8173c.firebasestorage.app",
+  messagingSenderId: "86494611395",
+  appId: "1:86494611395:web:356f1b5a999f5961c15f76"
 };
 
-// Previene inicializaciones múltiples en dev/hot-reload
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
 
+// Initialize Firebase services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
 export default app;

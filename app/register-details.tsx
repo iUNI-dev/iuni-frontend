@@ -1,5 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import React, { useEffect, useState } from 'react';
@@ -23,6 +24,7 @@ type FormState = {
   apellidos: string;
   email: string;
   password: string;
+  confirmPassword: string;
   puestoDeseado: string;
   departamento: string;
 };
@@ -38,6 +40,7 @@ const RegisterDetails: React.FC = () => {
     apellidos: '',
     email: emailParam || '',
     password: '',
+    confirmPassword: '',
     puestoDeseado: '',
     departamento: '',
   });
@@ -53,6 +56,18 @@ const RegisterDetails: React.FC = () => {
     if (provider === 'google') {
       setIsGoogleUser(true);
       console.log('Usuario de Google detectado, email:', emailParam);
+      
+      // Si es Google, cargar datos del usuario autenticado
+      const currentUser = auth.currentUser;
+      if (currentUser && currentUser.displayName) {
+        const nameParts = currentUser.displayName.split(' ');
+        setForm(prev => ({
+          ...prev,
+          nombres: nameParts[0] || '',
+          apellidos: nameParts.slice(1).join(' ') || '',
+          email: currentUser.email || emailParam,
+        }));
+      }
     }
   }, [provider, emailParam]);
 
@@ -105,9 +120,19 @@ const RegisterDetails: React.FC = () => {
       return;
     }
 
-    if (!isGoogleUser && !form.password.trim()) {
-      Alert.alert('Campo requerido', 'La contraseña es obligatoria.');
-      return;
+    if (!isGoogleUser) {
+      if (!form.password.trim()) {
+        Alert.alert('Campo requerido', 'La contraseña es obligatoria.');
+        return;
+      }
+      if (form.password.length < 6) {
+        Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
+        return;
+      }
+      if (form.password !== form.confirmPassword) {
+        Alert.alert('Contraseñas no coinciden', 'Las contraseñas deben ser iguales.');
+        return;
+      }
     }
 
     if (!captchaOk) {
@@ -117,14 +142,46 @@ const RegisterDetails: React.FC = () => {
 
     setLoading(true);
     try {
-      const currentUser = auth.currentUser;
-      const docId = currentUser?.uid || form.email.toLowerCase();
+      let userId: string;
+      let userEmail: string;
 
-      console.log('Guardando datos iniciales para:', docId);
+      if (isGoogleUser) {
+        // 🔹 USUARIO GOOGLE (ya está autenticado)
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          throw new Error('No hay usuario autenticado con Google');
+        }
+        userId = currentUser.uid;
+        userEmail = currentUser.email || form.email;
+        
+        // Actualizar displayName en Auth
+        await updateProfile(currentUser, {
+          displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`
+        });
+
+      } else {
+        // 🔹 USUARIO EMAIL (crear cuenta nueva)
+        console.log('🔹 Creando usuario con email/contraseña...');
+        const userCredential = await createUserWithEmailAndPassword(
+          auth, 
+          form.email.toLowerCase(), 
+          form.password
+        );
+        const user = userCredential.user;
+        userId = user.uid;
+        userEmail = user.email || form.email;
+
+        // Actualizar displayName en Auth
+        await updateProfile(user, {
+          displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`
+        });
+      }
+
+      console.log('🔹 Guardando datos en Firestore para:', userId);
 
       let cvUrl = null;
       if (cvFile) {
-        cvUrl = await uploadCvToStorage(docId);
+        cvUrl = await uploadCvToStorage(userId);
       }
 
       // 🔹 PAYLOAD CON DATOS INICIALES
@@ -132,7 +189,8 @@ const RegisterDetails: React.FC = () => {
         // Información personal básica
         nombres: form.nombres.trim(),
         apellidos: form.apellidos.trim(),
-        email: form.email.toLowerCase(),
+        email: userEmail.toLowerCase(),
+        displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`,
         
         // Información profesional
         puestoDeseado: form.puestoDeseado.trim() || null,
@@ -141,38 +199,33 @@ const RegisterDetails: React.FC = () => {
         
         // Metadatos
         provider: isGoogleUser ? 'google' : 'email',
+        userType: 'student',
         registrationStep: 1, // 🔹 Paso 1 completado
         registrationComplete: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        
-        // Campos que se completarán en student-profile
-        edad: null,
-        carrera: null,
-        añoCarrera: null,
-        universidad: null,
-        experiencia: null,
-        proyectos: null,
-        telefono: null,
-        fechaNacimiento: null,
-        documentoIdentidad: null,
-        pais: null,
-        ciudad: null,
-        descripcion: null,
-        disponibilidadViajar: null,
-        idiomas: null,
+        lastLogin: serverTimestamp(),
       };
 
-      await setDoc(doc(db, 'users', docId), payload, { merge: true });
+      await setDoc(doc(db, 'users', userId), payload, { merge: true });
 
       console.log('✅ Datos iniciales guardados, redirigiendo a student-profile...');
       
-      // 🔹 REDIRECCIÓN DIRECTA A STUDENT-PROFILE
-      router.push(`/student-profile?email=${encodeURIComponent(form.email)}`);
+      // 🔹 REDIRECCIÓN A STUDENT-PROFILE
+      router.replace(`/student-profile?email=${encodeURIComponent(userEmail)}`);
       
     } catch (err: any) {
       console.error('❌ Error guardando datos:', err);
-      Alert.alert('Error', err.message || 'No se pudo guardar la información.');
+      
+      if (err.code === 'auth/email-already-in-use') {
+        Alert.alert('Email en uso', 'Este email ya está registrado. Intenta iniciar sesión.');
+      } else if (err.code === 'auth/weak-password') {
+        Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
+      } else if (err.code === 'auth/invalid-email') {
+        Alert.alert('Email inválido', 'El formato del email no es correcto.');
+      } else {
+        Alert.alert('Error', err.message || 'No se pudo completar el registro.');
+      }
     } finally {
       setLoading(false);
       setUploadProgress(null);
@@ -190,7 +243,7 @@ const RegisterDetails: React.FC = () => {
       )}
       
       <Text style={styles.title}>
-        {isGoogleUser ? 'Paso 1: Información Básica' : 'Registro - Datos iniciales'}
+        {isGoogleUser ? 'Paso 1: Información Básica' : 'Completa tu registro'}
       </Text>
 
       <TextInput 
@@ -198,6 +251,7 @@ const RegisterDetails: React.FC = () => {
         placeholder="Nombres *" 
         value={form.nombres} 
         onChangeText={(t) => handleChange('nombres', t)} 
+        autoCapitalize="words"
       />
       
       <TextInput 
@@ -205,6 +259,7 @@ const RegisterDetails: React.FC = () => {
         placeholder="Apellidos *" 
         value={form.apellidos} 
         onChangeText={(t) => handleChange('apellidos', t)} 
+        autoCapitalize="words"
       />
       
       <TextInput 
@@ -217,14 +272,24 @@ const RegisterDetails: React.FC = () => {
         editable={!isGoogleUser}
       />
       
+      {/* MOSTRAR CAMPOS DE CONTRASEÑA SOLO PARA EMAIL */}
       {!isGoogleUser && (
-        <TextInput 
-          style={styles.input} 
-          placeholder="Contraseña *" 
-          value={form.password} 
-          onChangeText={(t) => handleChange('password', t)} 
-          secureTextEntry 
-        />
+        <>
+          <TextInput 
+            style={styles.input} 
+            placeholder="Contraseña * (mínimo 6 caracteres)" 
+            value={form.password} 
+            onChangeText={(t) => handleChange('password', t)} 
+            secureTextEntry 
+          />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Confirmar Contraseña *" 
+            value={form.confirmPassword} 
+            onChangeText={(t) => handleChange('confirmPassword', t)} 
+            secureTextEntry 
+          />
+        </>
       )}
 
       <TextInput 
@@ -267,9 +332,13 @@ const RegisterDetails: React.FC = () => {
           <ActivityIndicator color="#fff" />
         ) : (
           <Text style={styles.saveButtonText}>
-            Siguiente → Perfil de Estudiante
+            {isGoogleUser ? 'Siguiente → Perfil de Estudiante' : 'Crear Cuenta y Continuar'}
           </Text>
         )}
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => router.back()}>
+        <Text style={styles.link}>Atrás</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -312,8 +381,8 @@ const styles = StyleSheet.create({
   input: {
     width: '100%',
     maxWidth: 320,
-    height: 44,
-    borderColor: '#000',
+    height: 50,
+    borderColor: '#ddd',
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
@@ -332,12 +401,13 @@ const styles = StyleSheet.create({
   saveButton: {
     width: '100%',
     maxWidth: 320,
-    height: 48,
-    backgroundColor: '#000',
+    height: 50,
+    backgroundColor: '#d90429',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 18,
+    marginBottom: 12,
   },
   saveButtonText: { 
     color: '#fff', 
@@ -346,5 +416,10 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
+  },
+  link: {
+    color: '#d90429',
+    textAlign: 'center',
+    fontSize: 14,
   },
 });

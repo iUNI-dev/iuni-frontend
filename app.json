@@ -2,23 +2,28 @@
   "expo": {
     "name": "iuni-expo",
     "slug": "iuni-expo",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
     "scheme": "iuniexpo",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
-   "android": {
-  "package": "com.anonymous.iuniexpo",
-  "adaptiveIcon": {
-    "foregroundImage": "./assets/images/adaptive-icon.png",
-    "backgroundColor": "#ffffff"
-  },
-  "edgeToEdgeEnabled": true
-}
+    "android": {
+      "package": "com.anonymous.iuniexpo",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "iuniexpo",
+              "host": "oauth"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    }
+  }
+
 ,
     "web": {
       "bundler": "metro",
@@ -47,4 +52,3 @@
       }
     }
   }
-}
