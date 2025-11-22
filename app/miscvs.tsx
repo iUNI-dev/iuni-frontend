@@ -3,25 +3,25 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import {
-    doc,
-    getDoc,
-    serverTimestamp,
-    updateDoc
+  doc,
+  getDoc,
+  serverTimestamp,
+  updateDoc
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth, db, storage } from '../src/firebase/firebase';
 
@@ -31,8 +31,6 @@ type CVData = {
   apellidos: string;
   email: string;
   telefono: string;
-  fechaNacimiento: string;
-  documentoIdentidad: string;
   pais: string;
   ciudad: string;
   
@@ -41,45 +39,9 @@ type CVData = {
   universidad: string;
   añoCarrera: string;
   promedio: string;
-  fechaGrado: string;
-  
-  // Experiencia profesional
-  experiencia: Array<{
-    id: string;
-    puesto: string;
-    empresa: string;
-    fechaInicio: string;
-    fechaFin: string;
-    descripcion: string;
-    actual: boolean;
-  }>;
   
   // Habilidades
   habilidades: string[];
-  
-  // Idiomas
-  idiomas: Array<{
-    idioma: string;
-    nivel: 'básico' | 'intermedio' | 'avanzado' | 'nativo';
-  }>;
-  
-  // Proyectos
-  proyectos: Array<{
-    id: string;
-    nombre: string;
-    descripcion: string;
-    tecnologias: string[];
-    enlace: string;
-  }>;
-  
-  // Certificaciones
-  certificaciones: Array<{
-    id: string;
-    nombre: string;
-    institucion: string;
-    fecha: string;
-    duracion: string;
-  }>;
   
   // Archivos
   cvUrl: string;
@@ -95,7 +57,6 @@ const MiscvsScreen = () => {
   const [cvData, setCvData] = useState<CVData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeSection, setActiveSection] = useState('personal');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [currentEditField, setCurrentEditField] = useState('');
   const [editValue, setEditValue] = useState('');
@@ -123,8 +84,6 @@ const MiscvsScreen = () => {
           apellidos: data.apellidos || '',
           email: data.email || user.email || '',
           telefono: data.telefono || '',
-          fechaNacimiento: data.fechaNacimiento || '',
-          documentoIdentidad: data.documentoIdentidad || '',
           pais: data.pais || '',
           ciudad: data.ciudad || '',
           
@@ -133,22 +92,9 @@ const MiscvsScreen = () => {
           universidad: data.universidad || '',
           añoCarrera: data.añoCarrera || '',
           promedio: data.promedio || '',
-          fechaGrado: data.fechaGrado || '',
-          
-          // Experiencia profesional
-          experiencia: data.experiencia || [],
           
           // Habilidades
-          habilidades: data.habilidades || [],
-          
-          // Idiomas
-          idiomas: data.idiomas || [],
-          
-          // Proyectos
-          proyectos: data.proyectos || [],
-          
-          // Certificaciones
-          certificaciones: data.certificaciones || [],
+          habilidades: Array.isArray(data.habilidades) ? data.habilidades : [],
           
           // Archivos
           cvUrl: data.cvUrl || '',
@@ -279,219 +225,10 @@ const MiscvsScreen = () => {
     openEditModal('nuevaHabilidad', '');
   };
 
-  const addIdioma = () => {
-    openEditModal('nuevoIdioma', '');
-  };
-
-  const addExperiencia = () => {
-    setEditModalVisible(true);
-    setCurrentEditField('nuevaExperiencia');
-    setEditValue('');
-  };
-
-  const renderPersonalInfo = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Información Personal</Text>
-      
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Nombres</Text>
-        <TouchableOpacity onPress={() => openEditModal('nombres', cvData?.nombres || '')}>
-          <Text style={styles.value}>{cvData?.nombres || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Apellidos</Text>
-        <TouchableOpacity onPress={() => openEditModal('apellidos', cvData?.apellidos || '')}>
-          <Text style={styles.value}>{cvData?.apellidos || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Email</Text>
-        <Text style={styles.value}>{cvData?.email}</Text>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Teléfono</Text>
-        <TouchableOpacity onPress={() => openEditModal('telefono', cvData?.telefono || '')}>
-          <Text style={styles.value}>{cvData?.telefono || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>País</Text>
-        <TouchableOpacity onPress={() => openEditModal('pais', cvData?.pais || '')}>
-          <Text style={styles.value}>{cvData?.pais || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Ciudad</Text>
-        <TouchableOpacity onPress={() => openEditModal('ciudad', cvData?.ciudad || '')}>
-          <Text style={styles.value}>{cvData?.ciudad || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Foto de perfil */}
-      <View style={styles.photoSection}>
-        <Text style={styles.label}>Foto de Perfil</Text>
-        <TouchableOpacity style={styles.photoContainer} onPress={uploadProfilePhoto}>
-          <Image
-            source={{ uri: cvData?.fotoPerfil || 'https://via.placeholder.com/100' }}
-            style={styles.photo}
-          />
-          <Text style={styles.photoText}>Cambiar foto</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderAcademicInfo = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Información Académica</Text>
-      
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Carrera</Text>
-        <TouchableOpacity onPress={() => openEditModal('carrera', cvData?.carrera || '')}>
-          <Text style={styles.value}>{cvData?.carrera || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Universidad</Text>
-        <TouchableOpacity onPress={() => openEditModal('universidad', cvData?.universidad || '')}>
-          <Text style={styles.value}>{cvData?.universidad || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Año de Carrera</Text>
-        <TouchableOpacity onPress={() => openEditModal('añoCarrera', cvData?.añoCarrera || '')}>
-          <Text style={styles.value}>{cvData?.añoCarrera || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.infoRow}>
-        <Text style={styles.label}>Promedio</Text>
-        <TouchableOpacity onPress={() => openEditModal('promedio', cvData?.promedio || '')}>
-          <Text style={styles.value}>{cvData?.promedio || 'No especificado'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderHabilidades = () => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Habilidades</Text>
-        <TouchableOpacity style={styles.addButton} onPress={addHabilidad}>
-          <Text style={styles.addButtonText}>+ Agregar</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.skillsContainer}>
-        {cvData?.habilidades.map((habilidad, index) => (
-          <View key={index} style={styles.skillTag}>
-            <Text style={styles.skillText}>{habilidad}</Text>
-            <TouchableOpacity 
-              onPress={() => {
-                const nuevasHabilidades = cvData.habilidades.filter((_, i) => i !== index);
-                updateCVField('habilidades', nuevasHabilidades);
-              }}
-            >
-              <Text style={styles.removeText}>×</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-        
-        {(!cvData?.habilidades || cvData.habilidades.length === 0) && (
-          <Text style={styles.emptyText}>No hay habilidades agregadas</Text>
-        )}
-      </View>
-    </View>
-  );
-
-  const renderCVFile = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Currículum Vitae</Text>
-      
-      {cvData?.cvUrl ? (
-        <View style={styles.cvContainer}>
-          <Text style={styles.cvSuccess}>✅ CV subido correctamente</Text>
-          <TouchableOpacity 
-            style={styles.downloadButton}
-            onPress={() => {
-              // Aquí podrías abrir el PDF o descargarlo
-              Alert.alert('CV', 'Funcionalidad de descarga en desarrollo');
-            }}
-          >
-            <Text style={styles.downloadButtonText}>Ver CV</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.uploadButton}
-            onPress={uploadCVFile}
-            disabled={uploading}
-          >
-            <Text style={styles.uploadButtonText}>
-              {uploading ? 'Subiendo...' : 'Actualizar CV'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity 
-          style={styles.uploadCvButton}
-          onPress={uploadCVFile}
-          disabled={uploading}
-        >
-          <Text style={styles.uploadCvButtonText}>
-            {uploading ? 'Subiendo...' : '📄 Subir CV (PDF)'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-
-  const renderConfiguracion = () => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Configuración</Text>
-      
-      <View style={styles.configRow}>
-        <View style={styles.configText}>
-          <Text style={styles.configLabel}>Perfil Público</Text>
-          <Text style={styles.configDescription}>
-            Las empresas pueden ver tu perfil y contactarte
-          </Text>
-        </View>
-        <Switch
-          value={cvData?.perfilPublico || false}
-          onValueChange={(value) => updateCVField('perfilPublico', value)}
-          trackColor={{ false: '#767577', true: '#81b0ff' }}
-          thumbColor={cvData?.perfilPublico ? '#d90429' : '#f4f3f4'}
-        />
-      </View>
-
-      <View style={styles.configRow}>
-        <View style={styles.configText}>
-          <Text style={styles.configLabel}>Disponible para trabajar</Text>
-          <Text style={styles.configDescription}>
-            Mostrar que estás buscando empleo activamente
-          </Text>
-        </View>
-        <Switch
-          value={cvData?.disponibleParaTrabajar || false}
-          onValueChange={(value) => updateCVField('disponibleParaTrabajar', value)}
-          trackColor={{ false: '#767577', true: '#81b0ff' }}
-          thumbColor={cvData?.disponibleParaTrabajar ? '#d90429' : '#f4f3f4'}
-        />
-      </View>
-    </View>
-  );
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#d90429" />
+        <ActivityIndicator size="large" color="#d00" />
         <Text style={styles.loadingText}>Cargando tu CV...</Text>
       </View>
     );
@@ -501,44 +238,247 @@ const MiscvsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mi CV</Text>
-        <Text style={styles.headerSubtitle}>Gestiona tu información profesional</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Mi CV</Text>
+          <Text style={styles.headerSubtitle}>Información profesional completa</Text>
+        </View>
+        
+        {/* Foto de perfil en el header */}
+        <TouchableOpacity 
+          style={styles.headerPhotoContainer} 
+          onPress={uploadProfilePhoto}
+          disabled={uploading}
+        >
+          <Image
+            source={{ uri: cvData?.fotoPerfil || 'https://via.placeholder.com/100' }}
+            style={styles.headerPhoto}
+          />
+          <View style={styles.photoEditBadge}>
+            <Text style={styles.photoEditBadgeText}>Editar</Text>
+          </View>
+          {uploading && (
+            <View style={styles.uploadingOverlay}>
+              <ActivityIndicator size="small" color="#fff" />
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Navegación entre secciones */}
-      <ScrollView horizontal style={styles.navScroll} showsHorizontalScrollIndicator={false}>
-        <View style={styles.navContainer}>
-          {['personal', 'academico', 'habilidades', 'cv', 'configuracion'].map((section) => (
-            <TouchableOpacity
-              key={section}
-              style={[
-                styles.navButton,
-                activeSection === section && styles.navButtonActive
-              ]}
-              onPress={() => setActiveSection(section)}
+      {/* Contenido principal - ScrollView único con todas las secciones */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        
+        {/* Sección de Información Personal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Personal</Text>
+          
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Nombres</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('nombres', cvData?.nombres || '')}
             >
-              <Text style={[
-                styles.navText,
-                activeSection === section && styles.navTextActive
-              ]}>
-                {section === 'personal' && 'Personal'}
-                {section === 'academico' && 'Académico'}
-                {section === 'habilidades' && 'Habilidades'}
-                {section === 'cv' && 'CV'}
-                {section === 'configuracion' && 'Config'}
+              <Text style={styles.fieldValue}>{cvData?.nombres || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Apellidos</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('apellidos', cvData?.apellidos || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.apellidos || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Email</Text>
+            <View style={styles.fieldValueContainer}>
+              <Text style={styles.fieldValue}>{cvData?.email}</Text>
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Teléfono</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('telefono', cvData?.telefono || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.telefono || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>País</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('pais', cvData?.pais || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.pais || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Ciudad</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('ciudad', cvData?.ciudad || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.ciudad || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Sección de Información Académica */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Información Académica</Text>
+          
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Carrera</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('carrera', cvData?.carrera || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.carrera || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Universidad</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('universidad', cvData?.universidad || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.universidad || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Año de Carrera</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('añoCarrera', cvData?.añoCarrera || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.añoCarrera || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Promedio</Text>
+            <TouchableOpacity 
+              style={styles.fieldValueContainer}
+              onPress={() => openEditModal('promedio', cvData?.promedio || '')}
+            >
+              <Text style={styles.fieldValue}>{cvData?.promedio || 'No especificado'}</Text>
+              <Text style={styles.editIcon}>✎</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Sección de Habilidades */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Habilidades</Text>
+            <TouchableOpacity style={styles.addButton} onPress={addHabilidad}>
+              <Text style={styles.addButtonText}>+ Agregar</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.skillsContainer}>
+            {cvData?.habilidades.map((habilidad, index) => (
+              <View key={index} style={styles.skillTag}>
+                <Text style={styles.skillText}>{habilidad}</Text>
+                <TouchableOpacity 
+                  onPress={() => {
+                    const nuevasHabilidades = cvData.habilidades.filter((_, i) => i !== index);
+                    updateCVField('habilidades', nuevasHabilidades);
+                  }}
+                >
+                  <Text style={styles.removeText}>×</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            {(!cvData?.habilidades || cvData.habilidades.length === 0) && (
+              <Text style={styles.emptyText}>No hay habilidades agregadas</Text>
+            )}
+          </View>
+        </View>
+
+        {/* Sección de CV */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Currículum Vitae</Text>
+          
+          {cvData?.cvUrl ? (
+            <View style={styles.cvContainer}>
+              <Text style={styles.cvSuccess}>✅ CV subido correctamente</Text>
+              <TouchableOpacity 
+                style={styles.downloadButton}
+                onPress={() => {
+                  Alert.alert('CV', 'Funcionalidad de descarga en desarrollo');
+                }}
+              >
+                <Text style={styles.downloadButtonText}>Ver CV</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.uploadCvButton}
+              onPress={uploadCVFile}
+              disabled={uploading}
+            >
+              <Text style={styles.uploadCvButtonText}>
+                {uploading ? 'Subiendo...' : '📄 Subir CV (PDF)'}
               </Text>
             </TouchableOpacity>
-          ))}
+          )}
         </View>
-      </ScrollView>
 
-      {/* Contenido de la sección activa */}
-      <ScrollView style={styles.content}>
-        {activeSection === 'personal' && renderPersonalInfo()}
-        {activeSection === 'academico' && renderAcademicInfo()}
-        {activeSection === 'habilidades' && renderHabilidades()}
-        {activeSection === 'cv' && renderCVFile()}
-        {activeSection === 'configuracion' && renderConfiguracion()}
+        {/* Sección de Configuración */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Configuración</Text>
+          
+          <View style={styles.configRow}>
+            <View style={styles.configText}>
+              <Text style={styles.configLabel}>Perfil Público</Text>
+              <Text style={styles.configDescription}>
+                Las empresas pueden ver tu perfil y contactarte
+              </Text>
+            </View>
+            <Switch
+              value={cvData?.perfilPublico || false}
+              onValueChange={(value) => updateCVField('perfilPublico', value)}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={cvData?.perfilPublico ? '#d00' : '#f4f3f4'}
+            />
+          </View>
+
+          <View style={styles.configRow}>
+            <View style={styles.configText}>
+              <Text style={styles.configLabel}>Disponible para trabajar</Text>
+              <Text style={styles.configDescription}>
+                Mostrar que estás buscando empleo activamente
+              </Text>
+            </View>
+            <Switch
+              value={cvData?.disponibleParaTrabajar || false}
+              onValueChange={(value) => updateCVField('disponibleParaTrabajar', value)}
+              trackColor={{ false: '#767577', true: '#81b0ff' }}
+              thumbColor={cvData?.disponibleParaTrabajar ? '#d00' : '#f4f3f4'}
+            />
+          </View>
+        </View>
+
+        {/* Espacio al final */}
+        <View style={styles.footerSpace} />
       </ScrollView>
 
       {/* Modal para editar campos */}
@@ -594,271 +534,295 @@ const MiscvsScreen = () => {
   );
 };
 
+// ESTILOS ACTUALIZADOS - Diseño vertical continuo
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 16,
-    color: '#666',
+    color: '#666666',
+    fontWeight: '400',
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#fff',
+    paddingBottom: 24,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    borderBottomColor: '#f0f0f0',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerContent: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#212529',
+    fontSize: 28,
+    fontWeight: '300',
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
   },
   headerSubtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-    marginTop: 4,
+    fontSize: 15,
+    color: '#8c8c8c',
+    marginTop: 6,
+    fontWeight: '400',
   },
-  navScroll: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+  headerPhotoContainer: {
+    position: 'relative',
+    marginLeft: 20,
   },
-  navContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+  headerPhoto: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
   },
-  navButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 10,
-    backgroundColor: '#f8f9fa',
+  photoEditBadge: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#d00',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
-  navButtonActive: {
-    backgroundColor: '#d90429',
-  },
-  navText: {
-    fontSize: 14,
+  photoEditBadgeText: {
+    fontSize: 10,
     fontWeight: '600',
-    color: '#495057',
+    color: '#ffffff',
   },
-  navTextActive: {
-    color: '#fff',
+  uploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 36,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 24,
   },
   section: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#ffffff',
+    marginBottom: 32,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 16,
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 20,
   },
-  infoRow: {
+  fieldGroup: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#4d4d4d',
+    marginBottom: 8,
+  },
+  fieldValueContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
+    paddingHorizontal: 16,
+    backgroundColor: '#fafafa',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
+  fieldValue: {
+    fontSize: 16,
+    color: '#1a1a1a',
+    fontWeight: '400',
     flex: 1,
   },
-  value: {
-    fontSize: 14,
-    color: '#212529',
-    flex: 2,
-    textAlign: 'right',
-  },
-  photoSection: {
-    marginTop: 16,
-  },
-  photoContainer: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  photo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: '#e9ecef',
-  },
-  photoText: {
-    marginTop: 8,
-    color: '#d90429',
-    fontWeight: '600',
+  editIcon: {
+    fontSize: 16,
+    color: '#8c8c8c',
+    marginLeft: 12,
   },
   addButton: {
-    backgroundColor: '#d90429',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    backgroundColor: '#d00',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#d00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addButtonText: {
-    color: '#fff',
-    fontSize: 12,
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '600',
   },
   skillsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 8,
   },
   skillTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e7f3ff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#f8f8f8',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 16,
     marginRight: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   skillText: {
-    color: '#0066cc',
-    fontSize: 12,
-    marginRight: 6,
+    color: '#4d4d4d',
+    fontSize: 13,
+    marginRight: 8,
+    fontWeight: '400',
   },
   removeText: {
-    color: '#0066cc',
+    color: '#8c8c8c',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '300',
   },
   emptyText: {
-    color: '#6c757d',
+    color: '#8c8c8c',
     fontStyle: 'italic',
     textAlign: 'center',
     width: '100%',
-    padding: 20,
+    padding: 32,
+    fontSize: 15,
   },
   cvContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   cvSuccess: {
     color: '#28a745',
-    fontWeight: '600',
-    marginBottom: 12,
+    fontWeight: '500',
+    marginBottom: 16,
+    fontSize: 15,
   },
   uploadCvButton: {
-    backgroundColor: '#d90429',
-    padding: 16,
-    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    padding: 18,
+    borderRadius: 12,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#f0f0f0',
+    borderStyle: 'dashed',
+    width: '100%',
   },
   uploadCvButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    color: '#8c8c8c',
+    fontSize: 15,
+    fontWeight: '500',
   },
   downloadButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
-    marginBottom: 8,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    marginBottom: 12,
   },
   downloadButtonText: {
-    color: '#fff',
+    color: '#1a1a1a',
     fontSize: 14,
-    fontWeight: '600',
-  },
-  uploadButton: {
-    backgroundColor: '#6c757d',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
-  },
-  uploadButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   configRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
+    borderBottomColor: '#f8f8f8',
   },
   configText: {
     flex: 1,
-    marginRight: 16,
+    marginRight: 20,
   },
   configLabel: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#212529',
-    marginBottom: 4,
+    fontWeight: '500',
+    color: '#1a1a1a',
+    marginBottom: 6,
   },
   configDescription: {
-    fontSize: 12,
-    color: '#6c757d',
-    lineHeight: 16,
+    fontSize: 13,
+    color: '#8c8c8c',
+    lineHeight: 18,
+    fontWeight: '400',
   },
-  // Modal styles
+  footerSpace: {
+    height: 40,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
     maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#212529',
+    fontSize: 20,
+    fontWeight: '500',
+    marginBottom: 20,
+    color: '#1a1a1a',
     textTransform: 'capitalize',
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 8,
-    padding: 12,
+    borderColor: '#f0f0f0',
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    marginBottom: 20,
-    minHeight: 100,
+    marginBottom: 24,
+    minHeight: 120,
     textAlignVertical: 'top',
+    backgroundColor: '#fafafa',
+    color: '#1a1a1a',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -866,25 +830,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   modalButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 6,
-    minWidth: 80,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    minWidth: 90,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#6c757d',
+    backgroundColor: '#f8f8f8',
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
   },
   cancelButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#8c8c8c',
+    fontWeight: '500',
+    fontSize: 15,
   },
   saveButton: {
-    backgroundColor: '#d90429',
+    backgroundColor: '#d00',
+    shadowColor: '#d00',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   saveButtonText: {
-    color: '#fff',
+    color: '#ffffff',
     fontWeight: '600',
+    fontSize: 15,
   },
 });
 
