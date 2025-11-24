@@ -188,27 +188,15 @@ const EmployerDashboard = () => {
     );
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Estás seguro de que deseas cerrar sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Cerrar sesión',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logout();
-              router.replace('/login');
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo cerrar sesión');
-            }
-          },
-        },
-      ]
-    );
-  };
+  const handleLogout = async () => {
+  try {
+    await logout(); // Usar el logout del contexto si está disponible
+    router.replace('/login');
+  } catch (error) {
+    console.error('Error cerrando sesión:', error);
+    Alert.alert('Error', 'No se pudo cerrar sesión');
+  }
+};
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -457,6 +445,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
+  },
+   logoutButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: '#d90429', // Color rojo para logout
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // ... el resto de tus estilos existentes
+  buttonDisabled: {
+    opacity: 0.6,
   },
   headerTitle: {
     fontSize: 20,

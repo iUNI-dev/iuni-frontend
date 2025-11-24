@@ -1,34 +1,49 @@
-import { makeRedirectUri } from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  GoogleAuthProvider,
+  fetchSignInMethodsForEmail,
+  sendPasswordResetEmail,
+  signInWithCredential,
+  signInWithEmailAndPassword
+} from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme, useWindowDimensions } from 'react-native';
-import { Colors } from '../constants/Colors';
-import { useAuth } from '../src/contexts/AuthContext';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions
+} from 'react-native';
 import { auth, db } from '../src/firebase/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
-
-declare global {
-  interface Window {
-    google: any;
-  }
-}
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const googleDivRef = useRef<any>(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const { width } = useWindowDimensions();
   const router = useRouter();
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
-  const { user } = useAuth();
+  const googleDivRef = useRef<any>(null);
+
+  // Configuración de Google Auth
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    webClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
+    androidClientId: '433398025212-l0a6mffd13nl8aft395ma6c4untalmn6.apps.googleusercontent.com',
+    iosClientId: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
+    scopes: ['openid', 'profile', 'email'],
+    redirectUri: 'https://auth.expo.io/@ivan_lopez2025/iuni-expo'
+  });
 
   // Responsive sizes
   const isWide = width > 700;
@@ -36,132 +51,259 @@ const LoginScreen = () => {
   const formWidth = isWide ? 420 : '90%';
   const imageSize = isWide ? 380 : 160;
 
-  // Redirect URI para Google Auth
-  const redirectUri = makeRedirectUri({ useProxy: true });
-
-  // Configuración de Google Auth
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-    androidClientId: '496117929623-j0049lr9u9smvv233aos6781gbg8vm1r.apps.googleusercontent.com',
-    iosClientId: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
-    redirectUri,
-    scopes: ['profile', 'email'],
-    responseType: 'id_token',
-  });
-
-  // Redirigir si ya está autenticado
+  // 🔹 Manejar respuesta de Google
   useEffect(() => {
-    if (user) {
-      checkUserTypeAndRedirect(user.uid);
+    if (response?.type === 'success') {
+      handleGoogleSignIn(response);
     }
-  }, [user]);
+  }, [response]);
 
-  // Verificar tipo de usuario y redirigir
-  const checkUserTypeAndRedirect = async (userId: string) => {
+  // 🔹 Función mejorada para redirigir después del login
+  const redirectUserAfterLogin = async (userId: string, userEmail: string | null) => {
     try {
+      // Primero verificar en users
       const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        const userType = userData.userType;
-        const perfilCompletado = userData.registrationComplete || userData.perfilCompletado;
+      
+      if (!userDoc.exists()) {
+        console.log('🔹 Usuario no encontrado en Firestore, redirigiendo a selección de tipo');
+        router.replace('/register');
+        return;
+      }
 
-        if (userType === 'employer') {
-          if (perfilCompletado) {
-            router.replace('/employer-dashboard');
+      const userData = userDoc.data();
+      const userType = userData.userType;
+      const perfilCompletado = userData.registrationComplete || userData.perfilCompletado;
+
+      console.log('🔹 Datos del usuario:', { userType, perfilCompletado });
+
+      // 🔹 LÓGICA MEJORADA DE REDIRECCIÓN
+      if (userType === 'employer') {
+        if (perfilCompletado) {
+          console.log('🔹 Empleador con perfil completo, redirigiendo a dashboard...');
+          router.replace('/employer-dashboard');
+        } else {
+          console.log('🔹 Empleador con perfil incompleto, redirigiendo a employer-profile...');
+          router.replace('/employer-profile');
+        }
+      } else if (userType === 'student') {
+        // Verificar si tiene perfil de estudiante
+        const studentDoc = await getDoc(doc(db, 'students', userId));
+        
+        if (studentDoc.exists()) {
+          const studentData = studentDoc.data();
+          if (studentData.perfilCompletado) {
+            console.log('🔹 Estudiante con perfil completo, redirigiendo a home...');
+            router.replace('/home');
           } else {
-            router.replace('/employer-profile');
-          }
-        } else if (userType === 'student') {
-          if (perfilCompletado) {
-            router.replace('/');
-          } else {
-            router.replace('/student-profile');
+            console.log('🔹 Estudiante con perfil incompleto, redirigiendo a student-profile...');
+            router.replace(`/student-profile?email=${encodeURIComponent(userEmail || '')}`);
           }
         } else {
-          // Usuario sin tipo definido, redirigir a selección
-          router.replace('/register');
+          // No tiene perfil de estudiante, verificar registrationStep
+          if (userData.registrationStep === 1) {
+            console.log('🔹 Paso 1 completado, redirigiendo a register-details...');
+            router.replace(`/register-details?email=${encodeURIComponent(userEmail || '')}&provider=${userData.provider || 'email'}`);
+          } else {
+            console.log('🔹 Registro incompleto, redirigiendo a register-student...');
+            router.replace('/register-student');
+          }
         }
       } else {
-        // Usuario nuevo, redirigir a selección
+        // Usuario sin tipo definido, redirigir a selección
+        console.log('🔹 Usuario sin tipo definido, redirigiendo a selección...');
         router.replace('/register');
       }
     } catch (error) {
-      console.error('Error verificando tipo de usuario:', error);
+      console.error('Error verificando perfil:', error);
+      // Si hay error, redirigir a home por defecto
+      router.replace('/home');
     }
   };
 
-  // Manejar login con Google
-  const handleGoogleUser = async (firebaseUser: any) => {
+  // 🔹 Inicio de sesión con Google
+  const handleGoogleSignIn = async (response: any) => {
+    setGoogleLoading(true);
+    setErrorMessage('');
     try {
-      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      const { id_token } = response.params;
       
-      if (!userDoc.exists()) {
-        await setDoc(
-          doc(db, 'users', firebaseUser.uid),
-          {
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName || '',
-            provider: 'google',
-            lastLogin: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } else {
-        await setDoc(
-          doc(db, 'users', firebaseUser.uid),
-          {
-            lastLogin: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      if (!id_token) {
+        throw new Error('No se recibió token de Google');
       }
 
-      await checkUserTypeAndRedirect(firebaseUser.uid);
+      const credential = GoogleAuthProvider.credential(id_token);
+      const userCred = await signInWithCredential(auth, credential);
+      const user = userCred.user;
+
+      console.log('✅ Login con Google exitoso:', user.email);
+
+      // Actualizar último login en Firestore
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLogin: serverTimestamp(),
+      });
+
+      // 🔹 REDIRECCIÓN MEJORADA
+      redirectUserAfterLogin(user.uid, user.email);
+
     } catch (err: any) {
-      console.error('Error guardando usuario de Google:', err);
-      Alert.alert('Error', 'Error al guardar información del usuario');
+      console.error('❌ Error en login con Google:', err);
+      setErrorMessage('No se pudo iniciar sesión con Google');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
-  // Google Auth en Web
+  // 🔹 Inicio de sesión con email/password - VERSIÓN CORREGIDA
+  const handleEmailLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setErrorMessage('Por favor ingresa email y contraseña');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    
+    try {
+      console.log('🔹 Intentando login con:', email);
+      
+      // PRIMERO verificar si el usuario existe y su método de registro
+      let methods: string[] = [];
+      try {
+        methods = await fetchSignInMethodsForEmail(auth, email);
+        console.log('🔹 Métodos de inicio de sesión:', methods);
+      } catch (methodsError: any) {
+        console.log('🔹 Error en fetchSignInMethodsForEmail:', methodsError);
+        // Continuar con el login aunque falle la verificación de métodos
+      }
+      
+      // Si methods está vacío pero sabemos que el usuario existe, intentar login directamente
+      if (methods.length === 0) {
+        console.log('🔹 Métodos vacíos, pero intentando login directo...');
+        // No mostrar error, intentar login directamente
+      } else if (methods.includes('google.com')) {
+        setErrorMessage('Este email está registrado con Google. Usa "Ingresar con Google"');
+        return;
+      } else if (!methods.includes('password')) {
+        setErrorMessage('Este email no tiene contraseña configurada. Usa "Ingresar con Google" o regístrate de nuevo.');
+        return;
+      }
+
+      // Intentar inicio de sesión directamente
+      console.log('🔹 Iniciando sesión con email/contraseña...');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      console.log('✅ Login exitoso:', user.email, 'UID:', user.uid);
+
+      // Actualizar último login
+      await updateDoc(doc(db, 'users', user.uid), {
+        lastLogin: serverTimestamp(),
+      });
+
+      // 🔹 REDIRECCIÓN MEJORADA
+      redirectUserAfterLogin(user.uid, user.email);
+
+    } catch (err: any) {
+      console.error('❌ Error completo en login:', err);
+      console.error('❌ Código de error:', err.code);
+      
+      // MANEJO DETALLADO DE ERRORES
+      switch (err.code) {
+        case 'auth/user-not-found':
+          setErrorMessage('No existe una cuenta con este email. Regístrate primero.');
+          break;
+        case 'auth/wrong-password':
+          setErrorMessage('Contraseña incorrecta.');
+          break;
+        case 'auth/invalid-email':
+          setErrorMessage('El formato del email es inválido');
+          break;
+        case 'auth/invalid-credential':
+          setErrorMessage('Credenciales inválidas. Verifica tu email y contraseña.');
+          break;
+        case 'auth/too-many-requests':
+          setErrorMessage('Demasiados intentos fallidos. Intenta más tarde o restablece tu contraseña.');
+          break;
+        case 'auth/user-disabled':
+          setErrorMessage('Esta cuenta ha sido deshabilitada.');
+          break;
+        default:
+          setErrorMessage(`Error al iniciar sesión: ${err.message}`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 🔹 Función para resetear contraseña
+  const handleResetPassword = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Ingresa tu email para restablecer contraseña');
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert(
+        'Email enviado',
+        `Se envió un enlace para restablecer contraseña a ${email}`
+      );
+    } catch (error: any) {
+      setErrorMessage(`Error al enviar email: ${error.message}`);
+    }
+  };
+
+  // 🔹 Google Button para Web
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && googleDivRef.current) {
       const initializeGoogleAuth = () => {
         if (window.google && googleDivRef.current) {
           window.google.accounts.id.initialize({
-            client_id: '496117929623-7eoumvlftom3mcg3q945rmd6arbue1k2.apps.googleusercontent.com',
+            client_id: '433398025212-puf36khpbp6utjvimmdnpchg1q1t98g6.apps.googleusercontent.com',
             callback: async (response: any) => {
               setGoogleLoading(true);
+              setErrorMessage('');
               try {
                 const idToken = response?.credential;
-                if (!idToken) throw new Error('No idToken from Google web callback');
+                if (!idToken) throw new Error('No idToken from Google');
+                
                 const credential = GoogleAuthProvider.credential(idToken);
                 const userCred = await signInWithCredential(auth, credential);
-                await handleGoogleUser(userCred.user);
+                
+                // Actualizar último login
+                await updateDoc(doc(db, 'users', userCred.user.uid), {
+                  lastLogin: serverTimestamp(),
+                });
+
+                // 🔹 REDIRECCIÓN MEJORADA
+                redirectUserAfterLogin(userCred.user.uid, userCred.user.email);
+
               } catch (err: any) {
                 console.error('Google web sign-in error', err);
-                Alert.alert('Error', err.message || 'Error al autenticar con Google');
+                setErrorMessage('Error al autenticar con Google');
               } finally {
                 setGoogleLoading(false);
               }
             },
+            ux_mode: 'popup',
           });
 
           window.google.accounts.id.renderButton(googleDivRef.current, {
-            theme: 'filled_red',
+            theme: 'filled_blue',
             size: 'large',
-            text: 'continue_with',
+            text: 'signin_with',
             shape: 'pill',
+            width: 320,
           });
         }
       };
 
-      if (!document.getElementById('google-client-script')) {
+      if (!document.getElementById('google-login-script')) {
         const script = document.createElement('script');
         script.src = 'https://accounts.google.com/gsi/client';
         script.async = true;
         script.defer = true;
-        script.id = 'google-client-script';
+        script.id = 'google-login-script';
         script.onload = initializeGoogleAuth;
         document.body.appendChild(script);
       } else {
@@ -170,71 +312,8 @@ const LoginScreen = () => {
     }
   }, []);
 
-  // Google Auth en móvil
-  useEffect(() => {
-    if (response?.type === 'success') {
-      (async () => {
-        setGoogleLoading(true);
-        try {
-          const { authentication } = response;
-          const idToken = authentication?.idToken;
-          const accessToken = authentication?.accessToken;
-
-          if (!idToken && !accessToken) {
-            throw new Error('No se recibieron tokens de Google');
-          }
-
-          const credential = GoogleAuthProvider.credential(idToken ?? null, accessToken ?? null);
-          const userCred = await signInWithCredential(auth, credential);
-          await handleGoogleUser(userCred.user);
-        } catch (err: any) {
-          console.error('Google mobile sign-in error', err);
-          Alert.alert('Error', err.message || 'Error al autenticar con Google');
-        } finally {
-          setGoogleLoading(false);
-        }
-      })();
-    }
-  }, [response]);
-
-  // Login con email/password
-  const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Actualizar lastLogin
-      await setDoc(
-        doc(db, 'users', user.uid),
-        { lastLogin: serverTimestamp() },
-        { merge: true }
-      );
-
-      await checkUserTypeAndRedirect(user.uid);
-    } catch (error: any) {
-      console.error('Error en login:', error);
-      if (error.code === 'auth/user-not-found') {
-        Alert.alert('Error', 'Usuario no encontrado');
-      } else if (error.code === 'auth/wrong-password') {
-        Alert.alert('Error', 'Contraseña incorrecta');
-      } else if (error.code === 'auth/invalid-email') {
-        Alert.alert('Error', 'Correo inválido');
-      } else {
-        Alert.alert('Error', error.message || 'Error al iniciar sesión');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <View style={[styles.mainContainer, { backgroundColor: theme.background, flexDirection: isWide ? 'row' : 'column' }]}>
+    <View style={[styles.mainContainer, { flexDirection: isWide ? 'row' : 'column' }]}>
       {/* Left side: Image solo en web */}
       {isWeb && (
         <View style={[styles.imageContainer, { alignItems: 'center', justifyContent: 'center', paddingVertical: isWide ? 0 : 24 }]}>
@@ -247,7 +326,7 @@ const LoginScreen = () => {
       )}
 
       {/* Right side: Login */}
-      <View style={[styles.loginContainer, { backgroundColor: theme.background }]}>
+      <View style={styles.loginContainer}>
         {/* Logo arriba */}
         <View style={styles.logoContainer}>
           <Image
@@ -258,66 +337,78 @@ const LoginScreen = () => {
         </View>
 
         {/* Login form */}
-        <View style={[styles.formContainer, { width: formWidth, maxWidth: isWide ? 420 : 340, backgroundColor: theme.background }]}>
-          <Text style={[styles.title, { color: theme.text }]}>iUNI - Bolsa de Empleo</Text>
+        <View style={[styles.formContainer, { width: formWidth, maxWidth: isWide ? 420 : 340 }]}>
+          <Text style={styles.title}>iUNI - Bolsa de Empleo</Text>
 
-          {/* Google Auth Button */}
+          {/* Mensaje de error */}
+          {errorMessage ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* Botón de Google */}
           {Platform.OS === 'web' ? (
             <View style={styles.googleButtonContainer}>
-              <View ref={googleDivRef} style={styles.googleButtonWeb as any} />
+              <View ref={googleDivRef} style={styles.googleButtonWeb} />
               {googleLoading && <ActivityIndicator style={styles.googleLoader} />}
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.googleButton, { backgroundColor: theme.buttonBackground }, googleLoading && styles.buttonDisabled]}
-              onPress={() => promptAsync({ useProxy: true })}
+            <TouchableOpacity 
+              style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
+              onPress={() => promptAsync()}
               disabled={googleLoading || !request}
             >
               {googleLoading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={[styles.googleButtonText, { color: theme.buttonText }]}>
-                  Ingresar con Google
-                </Text>
+                <Text style={styles.googleButtonText}>Ingresar con Google</Text>
               )}
             </TouchableOpacity>
           )}
 
-          <Text style={[styles.orText, { color: theme.text }]}>o</Text>
+          <Text style={styles.orText}>o ingresa con tu email</Text>
 
           <TextInput
-            style={[styles.input, { borderColor: theme.text, color: theme.text }]}
+            style={styles.input}
             placeholder="Correo electrónico"
             placeholderTextColor="#888"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
           />
 
           <TextInput
-            style={[styles.input, { borderColor: theme.text, color: theme.text }]}
+            style={styles.input}
             placeholder="Contraseña"
             placeholderTextColor="#888"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
+            autoComplete="password"
           />
 
           <TouchableOpacity 
-            style={[styles.button, { backgroundColor: theme.buttonBackground }, loading && styles.buttonDisabled]} 
-            onPress={handleLogin}
+            style={[styles.button, loading && styles.buttonDisabled]} 
+            onPress={handleEmailLogin}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={[styles.buttonText, { color: theme.buttonText }]}>Iniciar Sesión</Text>
+              <Text style={styles.buttonText}>Iniciar Sesión</Text>
             )}
           </TouchableOpacity>
 
+          {/* Enlace para resetear contraseña */}
+          <TouchableOpacity onPress={handleResetPassword}>
+            <Text style={styles.link}>¿Olvidaste tu contraseña?</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={() => router.push('/register')}>
-            <Text style={[styles.link, { color: theme.text }]}>¿No tienes cuenta? Regístrate aquí</Text>
+            <Text style={styles.link}>¿No tienes cuenta? Regístrate aquí</Text>
           </TouchableOpacity>
         </View>
       </View>

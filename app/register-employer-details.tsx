@@ -1,5 +1,8 @@
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import * as DocumentPicker from 'expo-document-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,12 +16,8 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
-import { auth, db, storage } from '../src/firebase/firebase';
 import { Colors } from '../constants/Colors';
+import { auth, db, storage } from '../src/firebase/firebase';
 
 const RegisterEmployerDetails = () => {
   const params = useLocalSearchParams();
@@ -34,7 +33,6 @@ const RegisterEmployerDetails = () => {
   const [nombreRepresentante, setNombreRepresentante] = useState('');
   const [telefonos, setTelefonos] = useState('');
   const [correoAcceso, setCorreoAcceso] = useState(params.email as string || '');
-  const [password, setPassword] = useState('');
   const [nombreEmpresa, setNombreEmpresa] = useState('');
   const [horarios, setHorarios] = useState('');
   const [ciudadCodigoPostal, setCiudadCodigoPostal] = useState('');
@@ -212,11 +210,11 @@ const RegisterEmployerDetails = () => {
         updatedAt: serverTimestamp(),
       };
 
-      // Si es registro con email, guardar password
-      if (password && !user.providerData.find(p => p.providerId === 'google.com')) {
-        userData.provider = 'email';
-      } else {
+      // Determinar el proveedor de autenticación
+      if (user.providerData.find(p => p.providerId === 'google.com')) {
         userData.provider = 'google';
+      } else {
+        userData.provider = 'email';
       }
 
       // Guardar en users
@@ -297,20 +295,6 @@ const RegisterEmployerDetails = () => {
             autoCapitalize="none"
             placeholderTextColor="#888"
           />
-
-          {!user?.providerData.find(p => p.providerId === 'google.com') && (
-            <>
-              <Text style={[styles.label, { color: theme.text }]}>Contraseña *</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Contraseña"
-                secureTextEntry
-                placeholderTextColor="#888"
-              />
-            </>
-          )}
 
           <Text style={[styles.label, { color: theme.text }]}>Nombre de la empresa *</Text>
           <TextInput
@@ -654,4 +638,3 @@ const styles = StyleSheet.create({
 });
 
 export default RegisterEmployerDetails;
-

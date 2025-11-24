@@ -2,14 +2,14 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth } from '../src/firebase/firebase';
 
@@ -178,7 +178,7 @@ const NotificacionesScreen = () => {
         router.push(`/empresa-detalles?id=${notification.datos.empresaId}`);
         break;
       case 'ver_mensajes':
-        router.push('/s');
+        router.push('/mensajes');
         break;
       case 'completar_perfil':
         router.push('/student-profile');
