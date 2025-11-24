@@ -1,14 +1,14 @@
-import { useRouter } from 'expo-router';
-import React, { useState, useEffect, useRef } from 'react';
-import { Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions, useColorScheme, ActivityIndicator, Alert } from 'react-native';
-import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as Google from 'expo-auth-session/providers/google';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../src/firebase/firebase';
+import { GoogleAuthProvider, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme, useWindowDimensions } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useAuth } from '../src/contexts/AuthContext';
+import { auth, db } from '../src/firebase/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -73,7 +73,7 @@ const LoginScreen = () => {
           }
         } else if (userType === 'student') {
           if (perfilCompletado) {
-            router.replace('/(tabs)');
+            router.replace('/');
           } else {
             router.replace('/student-profile');
           }

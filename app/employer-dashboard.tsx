@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,10 +14,9 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../src/firebase/firebase';
 import { Colors } from '../constants/Colors';
 import { useAuth } from '../src/contexts/AuthContext';
+import { db } from '../src/firebase/firebase';
 
 const EmployerDashboard = () => {
   const router = useRouter();

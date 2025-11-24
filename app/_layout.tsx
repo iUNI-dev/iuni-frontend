@@ -15,6 +15,7 @@ export default function RootLayout() {
         <Stack.Screen name="employer-profile" options={{ title: 'Perfil Empleador' }} />
         <Stack.Screen name="employer-dashboard" options={{ title: 'Dashboard Empleador' }} />
         <Stack.Screen name="employer-applications" options={{ title: 'Aplicaciones' }} />
+          
       </Stack>
     </AuthProvider>
   );
