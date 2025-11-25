@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Image,
   Platform,
   ScrollView,
@@ -249,10 +250,16 @@ const RegisterEmployerDetails = () => {
     }
   };
 
+  const screenWidth = Dimensions.get('window').width;
+  const isWeb = Platform.OS === 'web';
+  const isTablet = screenWidth >= 768;
+  const useTwoColumns = isWeb || isTablet;
+
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.background }]}
       contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
     >
       <Image
         source={require('../assets/images/logo-texto.png')}
@@ -263,9 +270,9 @@ const RegisterEmployerDetails = () => {
         Completa tu información
       </Text>
 
-      <View style={styles.formContainer}>
+      <View style={[styles.formContainer, !useTwoColumns && styles.formContainerSingle]}>
         {/* Columna izquierda */}
-        <View style={styles.column}>
+        <View style={[styles.column, !useTwoColumns && styles.columnFull]}>
           <Text style={[styles.label, { color: theme.text }]}>Nombre del representante *</Text>
           <TextInput
             style={[styles.input, { borderColor: theme.text, color: theme.text }]}
@@ -316,7 +323,7 @@ const RegisterEmployerDetails = () => {
         </View>
 
         {/* Columna derecha */}
-        <View style={styles.column}>
+        <View style={[styles.column, !useTwoColumns && styles.columnFull]}>
           <Text style={[styles.label, { color: theme.text }]}>Ciudad o código postal</Text>
           <TextInput
             style={[styles.input, { borderColor: theme.text, color: theme.text }]}
@@ -327,7 +334,12 @@ const RegisterEmployerDetails = () => {
           />
 
           <Text style={[styles.label, { color: theme.text }]}>País *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.pickerScroll}
+            contentContainerStyle={styles.pickerScrollContent}
+          >
             {paises.map((p) => (
               <TouchableOpacity
                 key={p}
@@ -360,7 +372,12 @@ const RegisterEmployerDetails = () => {
           />
 
           <Text style={[styles.label, { color: theme.text }]}>Número de trabajadores</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.pickerScroll}
+            contentContainerStyle={styles.pickerScrollContent}
+          >
             <TouchableOpacity
               style={[
                 styles.pickerChip,
@@ -401,7 +418,12 @@ const RegisterEmployerDetails = () => {
           </ScrollView>
 
           <Text style={[styles.label, { color: theme.text }]}>Sector empresarial *</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.pickerScroll}
+            contentContainerStyle={styles.pickerScrollContent}
+          >
             <TouchableOpacity
               style={[
                 styles.pickerChip,
@@ -457,7 +479,12 @@ const RegisterEmployerDetails = () => {
           </TouchableOpacity>
 
           <Text style={[styles.label, { color: theme.text }]}>Número de vacantes anuales aproximadas</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerScroll}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            style={styles.pickerScroll}
+            contentContainerStyle={styles.pickerScrollContent}
+          >
             <TouchableOpacity
               style={[
                 styles.pickerChip,
@@ -537,20 +564,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 24,
-    paddingBottom: 48,
+    padding: Platform.OS === 'web' ? 24 : 16,
+    paddingBottom: Platform.OS === 'web' ? 48 : 32,
   },
   logo: {
-    width: 300,
-    height: 100,
+    width: Platform.OS === 'web' ? 300 : 250,
+    height: Platform.OS === 'web' ? 100 : 80,
     alignSelf: 'center',
-    marginBottom: 24,
+    marginBottom: Platform.OS === 'web' ? 24 : 16,
   },
   title: {
-    fontSize: 24,
+    fontSize: Platform.OS === 'web' ? 24 : 20,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: Platform.OS === 'web' ? 32 : 24,
   },
   formContainer: {
     flexDirection: 'row',
@@ -558,78 +585,97 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 24,
   },
+  formContainerSingle: {
+    flexDirection: 'column',
+  },
   column: {
     width: '48%',
     minWidth: 280,
   },
+  columnFull: {
+    width: '100%',
+    minWidth: '100%',
+  },
   label: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
     marginBottom: 8,
-    marginTop: 12,
+    marginTop: Platform.OS === 'web' ? 12 : 16,
   },
   input: {
-    height: 44,
+    height: Platform.OS === 'web' ? 44 : 48,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
-    marginBottom: 8,
+    marginBottom: 12,
     backgroundColor: 'transparent',
+    fontSize: Platform.OS === 'web' ? 14 : 16,
   },
   pickerScroll: {
     marginBottom: 8,
   },
+  pickerScrollContent: {
+    paddingRight: Platform.OS === 'android' ? 16 : 0,
+  },
   pickerChip: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     borderWidth: 1,
     marginRight: 8,
     marginBottom: 8,
+    minHeight: 40,
+    justifyContent: 'center',
   },
   pickerChipText: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
   },
   uploadButton: {
-    height: 44,
+    height: Platform.OS === 'web' ? 44 : 48,
     borderWidth: 1,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    paddingHorizontal: 12,
   },
   uploadButtonText: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'web' ? 14 : 13,
     fontWeight: '600',
+    textAlign: 'center',
   },
   captchaContainer: {
     marginVertical: 24,
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   captchaLabel: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'web' ? 16 : 15,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   captchaInput: {
     width: 120,
-    height: 44,
+    height: Platform.OS === 'web' ? 44 : 48,
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: 12,
     textAlign: 'center',
     backgroundColor: 'transparent',
+    fontSize: Platform.OS === 'web' ? 14 : 16,
   },
   submitButton: {
-    height: 50,
+    height: Platform.OS === 'web' ? 50 : 52,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 16,
+    marginHorizontal: Platform.OS === 'android' ? 0 : 0,
   },
   submitButtonText: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'web' ? 18 : 16,
     fontWeight: 'bold',
   },
   buttonDisabled: {
