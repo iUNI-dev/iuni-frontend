@@ -80,42 +80,78 @@ const HomeScreen = () => {
 
   const loadRecentJobs = async () => {
     try {
-      // Simular datos de empleos recientes
-      const mockJobs: Job[] = [
-        {
-          id: '1',
-          titulo: 'Desarrollador Frontend React',
-          empresa: 'Tech Solutions SA',
-          ubicacion: 'San Salvador',
-          tipo: 'Tiempo completo',
-          salario: '$800 - $1200',
-          fecha: 'Hace 2 horas',
-          logo: 'https://via.placeholder.com/40'
-        },
-        {
-          id: '2',
-          titulo: 'Diseñador UX/UI',
-          empresa: 'Creative Studio',
-          ubicacion: 'Santa Ana',
-          tipo: 'Medio tiempo',
-          salario: '$600 - $900',
-          fecha: 'Hace 4 horas',
-          logo: 'https://via.placeholder.com/40'
-        },
-        {
-          id: '3',
-          titulo: 'Analista de Datos',
-          empresa: 'Data Insights',
-          ubicacion: 'San Miguel',
-          tipo: 'Tiempo completo',
-          salario: '$900 - $1300',
-          fecha: 'Hace 1 día',
-          logo: 'https://via.placeholder.com/40'
+      // Cargar vacantes reales desde Firebase
+      // Primero intentamos obtener todas las vacantes sin filtros
+      const vacantesQuery = query(collection(db, 'vacantes'));
+      
+      const querySnapshot = await getDocs(vacantesQuery);
+      const jobsData: Job[] = [];
+      
+      for (const docSnap of querySnapshot.docs) {
+        const vacanteData = docSnap.data();
+        
+        // Filtrar solo vacantes activas
+        if (vacanteData.activa !== true) {
+          continue;
         }
-      ];
-      setRecentJobs(mockJobs);
+        
+        // Formatear salario
+        let salarioTexto = 'Salario a convenir';
+        if (vacanteData.salarioMin && vacanteData.salarioMax) {
+          salarioTexto = `$${vacanteData.salarioMin} - $${vacanteData.salarioMax} ${vacanteData.moneda || 'USD'}`;
+        } else if (vacanteData.salarioMin) {
+          salarioTexto = `Desde $${vacanteData.salarioMin} ${vacanteData.moneda || 'USD'}`;
+        }
+        
+        // Formatear fecha
+        let fechaTexto = 'Fecha no disponible';
+        if (vacanteData.fechaPublicacion) {
+          const fecha = vacanteData.fechaPublicacion.toDate ? vacanteData.fechaPublicacion.toDate() : new Date(vacanteData.fechaPublicacion);
+          const ahora = new Date();
+          const diferencia = ahora.getTime() - fecha.getTime();
+          const horas = Math.floor(diferencia / (1000 * 60 * 60));
+          const dias = Math.floor(horas / 24);
+          
+          if (dias > 0) {
+            fechaTexto = `Hace ${dias} día${dias > 1 ? 's' : ''}`;
+          } else if (horas > 0) {
+            fechaTexto = `Hace ${horas} hora${horas > 1 ? 's' : ''}`;
+          } else {
+            fechaTexto = 'Hace menos de 1 hora';
+          }
+        }
+        
+        const job: Job = {
+          id: docSnap.id,
+          titulo: vacanteData.titulo || 'Título no disponible',
+          empresa: vacanteData.empresaNombre || 'Empresa',
+          ubicacion: vacanteData.ubicacion || 'Ubicación no especificada',
+          tipo: vacanteData.tipo || 'Tiempo completo',
+          salario: salarioTexto,
+          fecha: fechaTexto,
+          logo: 'https://via.placeholder.com/40' // Por ahora usamos placeholder, después se puede agregar logo de empresa
+        };
+        
+        jobsData.push(job);
+      }
+      
+      // Ordenar por fecha de publicación (más recientes primero)
+      jobsData.sort((a, b) => {
+        // Si no hay fecha, poner al final
+        if (!a.fecha || a.fecha === 'Fecha no disponible') return 1;
+        if (!b.fecha || b.fecha === 'Fecha no disponible') return -1;
+        
+        // Ordenar por fecha más reciente primero
+        return a.fecha.localeCompare(b.fecha);
+      });
+      
+      // Limitar a 5 empleos más recientes
+      const limitedJobs = jobsData.slice(0, 5);
+      setRecentJobs(limitedJobs);
     } catch (error) {
       console.error('Error cargando empleos:', error);
+      // En caso de error, mostrar mensaje al usuario pero no romper la app
+      Alert.alert('Aviso', 'No se pudieron cargar los empleos recientes. Intenta de nuevo más tarde.');
     } finally {
       setLoading(false);
     }
@@ -123,23 +159,12 @@ const HomeScreen = () => {
 
   const loadRecentSearches = async () => {
     try {
-      const user = auth.currentUser;
-      if (user) {
-        const searchesQuery = query(
-          collection(db, 'recent_searches'),
-          where('userId', '==', user.uid),
-          orderBy('fecha', 'desc'),
-          limit(5)
-        );
-        const snapshot = await getDocs(searchesQuery);
-        const searches = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as RecentSearch[];
-        setRecentSearches(searches);
-      }
+      // Por ahora deshabilitar búsquedas recientes para evitar errores de Firebase
+      // Se puede habilitar después cuando se configure el índice
+      setRecentSearches([]);
     } catch (error) {
       console.error('Error cargando búsquedas:', error);
+      setRecentSearches([]);
     }
   };
 
