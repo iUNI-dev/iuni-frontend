@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   Modal,
   RefreshControl,
   ScrollView,
@@ -12,7 +13,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useColorScheme,
+  useColorScheme
 } from 'react-native';
 import { Colors } from '../constants/Colors';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -189,252 +190,269 @@ const EmployerDashboard = () => {
   };
 
   const handleLogout = async () => {
-  try {
-    await logout(); // Usar el logout del contexto si está disponible
-    router.replace('/login');
-  } catch (error) {
-    console.error('Error cerrando sesión:', error);
-    Alert.alert('Error', 'No se pudo cerrar sesión');
-  }
-};
+    try {
+      await logout();
+      router.replace('/login');
+    } catch (error) {
+      console.error('Error cerrando sesión:', error);
+      Alert.alert('Error', 'No se pudo cerrar sesión');
+    }
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.text }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>Dashboard de Empleador</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity
-            style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
-            onPress={() => router.push('/employer-applications')}
-          >
-            <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
-              Ver Aplicaciones
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
-            onPress={() => router.push('/employer-profile')}
-          >
-            <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
-              Perfil
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
-            onPress={handleLogout}
-          >
-            <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
-              Cerrar Sesión
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Botón crear vacante */}
-      <View style={styles.createButtonContainer}>
-        <TouchableOpacity
-          style={[styles.createButton, { backgroundColor: theme.buttonBackground }]}
-          onPress={() => openModal()}
-        >
-          <Text style={[styles.createButtonText, { color: theme.buttonText }]}>
-            + Crear Nueva Vacante
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Lista de vacantes */}
-      {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.text} />
-        </View>
-      ) : (
-        <ScrollView
-          style={styles.vacantesList}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        >
-          {vacantes.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={[styles.emptyText, { color: theme.text }]}>
-                No hay vacantes publicadas. Crea una nueva vacante para comenzar.
-              </Text>
-            </View>
-          ) : (
-            vacantes.map((vacante) => (
-              <View
-                key={vacante.id}
-                style={[styles.vacanteCard, { backgroundColor: theme.background, borderColor: theme.text }]}
-              >
-                <View style={styles.vacanteHeader}>
-                  <Text style={[styles.vacanteTitle, { color: theme.text }]}>
-                    {vacante.titulo}
-                  </Text>
-                  <View style={styles.vacanteActions}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, { backgroundColor: theme.buttonBackground }]}
-                      onPress={() => openModal(vacante)}
-                    >
-                      <Text style={[styles.actionButtonText, { color: theme.buttonText }]}>
-                        Editar
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.deleteButton, { backgroundColor: '#DE0606' }]}
-                      onPress={() => handleDeleteVacante(vacante.id)}
-                    >
-                      <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>
-                        Eliminar
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <Text style={[styles.vacanteDescription, { color: theme.text }]}>
-                  {vacante.descripcion}
-                </Text>
-                <View style={styles.vacanteDetails}>
-                  <Text style={[styles.vacanteDetail, { color: theme.text }]}>
-                    📍 {vacante.ubicacion}
-                  </Text>
-                  <Text style={[styles.vacanteDetail, { color: theme.text }]}>
-                    ⏰ {vacante.tipo}
-                  </Text>
-                  <Text style={[styles.vacanteDetail, { color: theme.text }]}>
-                    💰 {vacante.salarioMin} - {vacante.salarioMax} {vacante.moneda}
-                  </Text>
-                </View>
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
-
-      {/* Modal para crear/editar vacante */}
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
-            <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {editingVacante ? 'Editar Vacante' : 'Nueva Vacante'}
-            </Text>
-
-            <ScrollView style={styles.modalForm}>
-              <Text style={[styles.label, { color: theme.text }]}>Título *</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={titulo}
-                onChangeText={setTitulo}
-                placeholder="Título del empleo"
-                placeholderTextColor="#888"
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>Descripción *</Text>
-              <TextInput
-                style={[styles.textArea, { borderColor: theme.text, color: theme.text }]}
-                value={descripcion}
-                onChangeText={setDescripcion}
-                placeholder="Descripción del empleo"
-                placeholderTextColor="#888"
-                multiline
-                numberOfLines={4}
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>Ubicación *</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={ubicacion}
-                onChangeText={setUbicacion}
-                placeholder="Ubicación"
-                placeholderTextColor="#888"
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>Tipo</Text>
-              <View style={styles.radioGroup}>
-                <TouchableOpacity
-                  style={[styles.radioOption, tipo === 'Tiempo completo' && { backgroundColor: theme.buttonBackground }]}
-                  onPress={() => setTipo('Tiempo completo')}
-                >
-                  <Text style={[styles.radioText, { color: tipo === 'Tiempo completo' ? theme.buttonText : theme.text }]}>
-                    Tiempo completo
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.radioOption, tipo === 'Medio tiempo' && { backgroundColor: theme.buttonBackground }]}
-                  onPress={() => setTipo('Medio tiempo')}
-                >
-                  <Text style={[styles.radioText, { color: tipo === 'Medio tiempo' ? theme.buttonText : theme.text }]}>
-                    Medio tiempo
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={[styles.label, { color: theme.text }]}>Salario Mínimo</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={salarioMin}
-                onChangeText={setSalarioMin}
-                placeholder="0"
-                keyboardType="numeric"
-                placeholderTextColor="#888"
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>Salario Máximo</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={salarioMax}
-                onChangeText={setSalarioMax}
-                placeholder="0"
-                keyboardType="numeric"
-                placeholderTextColor="#888"
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>Moneda</Text>
-              <TextInput
-                style={[styles.input, { borderColor: theme.text, color: theme.text }]}
-                value={moneda}
-                onChangeText={setMoneda}
-                placeholder="USD"
-                placeholderTextColor="#888"
-              />
-            </ScrollView>
-
-            <View style={styles.modalButtons}>
+    <ImageBackground
+      source={require('../assets/images/portada-empresa.jpg')}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay}>
+        <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: '#000000' }]}>
+            <Text style={[styles.headerTitle, { color: '#000000' }]}>Dashboard de Empleador</Text>
+            <View style={styles.headerButtons}>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: '#888' }]}
-                onPress={() => {
-                  setModalVisible(false);
-                  resetForm();
-                }}
+                style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
+                onPress={() => router.push('/employer-applications')}
               >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
+                <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
+                  Ver Aplicaciones
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: theme.buttonBackground }, loading && styles.buttonDisabled]}
-                onPress={handleSaveVacante}
-                disabled={loading}
+                style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
+                onPress={() => router.push('/employer-profile')}
               >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
-                    {editingVacante ? 'Actualizar' : 'Crear'}
-                  </Text>
-                )}
+                <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
+                  Perfil
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.headerButton, { backgroundColor: theme.buttonBackground }]}
+                onPress={handleLogout}
+              >
+                <Text style={[styles.headerButtonText, { color: theme.buttonText }]}>
+                  Cerrar Sesión
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Botón crear vacante */}
+          <View style={styles.createButtonContainer}>
+            <TouchableOpacity
+              style={[styles.createButton, { backgroundColor: theme.buttonBackground }]}
+              onPress={() => openModal()}
+            >
+              <Text style={[styles.createButtonText, { color: theme.buttonText }]}>
+                + Crear Nueva Vacante
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Lista de vacantes */}
+          {loading && !refreshing ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#000000" />
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.vacantesList}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              }
+            >
+              {vacantes.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Text style={[styles.emptyText, { color: '#000000' }]}>
+                    No hay vacantes publicadas. Crea una nueva vacante para comenzar.
+                  </Text>
+                </View>
+              ) : (
+                vacantes.map((vacante) => (
+                  <View
+                    key={vacante.id}
+                    style={[styles.vacanteCard, { backgroundColor: 'rgba(255, 255, 255, 0.95)', borderColor: '#000000' }]}
+                  >
+                    <View style={styles.vacanteHeader}>
+                      <Text style={[styles.vacanteTitle, { color: '#000000' }]}>
+                        {vacante.titulo}
+                      </Text>
+                      <View style={styles.vacanteActions}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, { backgroundColor: theme.buttonBackground }]}
+                          onPress={() => openModal(vacante)}
+                        >
+                          <Text style={[styles.actionButtonText, { color: theme.buttonText }]}>
+                            Editar
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.deleteButton, { backgroundColor: '#DE0606' }]}
+                          onPress={() => handleDeleteVacante(vacante.id)}
+                        >
+                          <Text style={[styles.actionButtonText, { color: '#FFFFFF' }]}>
+                            Eliminar
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <Text style={[styles.vacanteDescription, { color: '#000000' }]}>
+                      {vacante.descripcion}
+                    </Text>
+                    <View style={styles.vacanteDetails}>
+                      <Text style={[styles.vacanteDetail, { color: '#000000' }]}>
+                        📍 {vacante.ubicacion}
+                      </Text>
+                      <Text style={[styles.vacanteDetail, { color: '#000000' }]}>
+                        ⏰ {vacante.tipo}
+                      </Text>
+                      <Text style={[styles.vacanteDetail, { color: '#000000' }]}>
+                        💰 {vacante.salarioMin} - {vacante.salarioMax} {vacante.moneda}
+                      </Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          )}
+
+          {/* Modal para crear/editar vacante */}
+          <Modal
+            visible={modalVisible}
+            animationType="slide"
+            transparent={true}
+            onRequestClose={() => setModalVisible(false)}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={[styles.modalContent, { backgroundColor: 'rgba(255, 255, 255, 0.95)' }]}>
+                <Text style={[styles.modalTitle, { color: '#000000' }]}>
+                  {editingVacante ? 'Editar Vacante' : 'Nueva Vacante'}
+                </Text>
+
+                <ScrollView style={styles.modalForm}>
+                  <Text style={[styles.label, { color: '#000000' }]}>Título *</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: '#000000', color: '#000000' }]}
+                    value={titulo}
+                    onChangeText={setTitulo}
+                    placeholder="Título del empleo"
+                    placeholderTextColor="#666666"
+                  />
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Descripción *</Text>
+                  <TextInput
+                    style={[styles.textArea, { borderColor: '#000000', color: '#000000' }]}
+                    value={descripcion}
+                    onChangeText={setDescripcion}
+                    placeholder="Descripción del empleo"
+                    placeholderTextColor="#666666"
+                    multiline
+                    numberOfLines={4}
+                  />
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Ubicación *</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: '#000000', color: '#000000' }]}
+                    value={ubicacion}
+                    onChangeText={setUbicacion}
+                    placeholder="Ubicación"
+                    placeholderTextColor="#666666"
+                  />
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Tipo</Text>
+                  <View style={styles.radioGroup}>
+                    <TouchableOpacity
+                      style={[styles.radioOption, tipo === 'Tiempo completo' && { backgroundColor: theme.buttonBackground }]}
+                      onPress={() => setTipo('Tiempo completo')}
+                    >
+                      <Text style={[styles.radioText, { color: tipo === 'Tiempo completo' ? theme.buttonText : '#000000' }]}>
+                        Tiempo completo
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.radioOption, tipo === 'Medio tiempo' && { backgroundColor: theme.buttonBackground }]}
+                      onPress={() => setTipo('Medio tiempo')}
+                    >
+                      <Text style={[styles.radioText, { color: tipo === 'Medio tiempo' ? theme.buttonText : '#000000' }]}>
+                        Medio tiempo
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Salario Mínimo</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: '#000000', color: '#000000' }]}
+                    value={salarioMin}
+                    onChangeText={setSalarioMin}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor="#666666"
+                  />
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Salario Máximo</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: '#000000', color: '#000000' }]}
+                    value={salarioMax}
+                    onChangeText={setSalarioMax}
+                    placeholder="0"
+                    keyboardType="numeric"
+                    placeholderTextColor="#666666"
+                  />
+
+                  <Text style={[styles.label, { color: '#000000' }]}>Moneda</Text>
+                  <TextInput
+                    style={[styles.input, { borderColor: '#000000', color: '#000000' }]}
+                    value={moneda}
+                    onChangeText={setMoneda}
+                    placeholder="USD"
+                    placeholderTextColor="#666666"
+                  />
+                </ScrollView>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, { backgroundColor: '#888' }]}
+                    onPress={() => {
+                      setModalVisible(false);
+                      resetForm();
+                    }}
+                  >
+                    <Text style={styles.modalButtonText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, { backgroundColor: theme.buttonBackground }, loading && styles.buttonDisabled]}
+                    onPress={handleSaveVacante}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={[styles.modalButtonText, { color: theme.buttonText }]}>
+                        {editingVacante ? 'Actualizar' : 'Crear'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </View>
+      </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
   container: {
     flex: 1,
   },
@@ -445,12 +463,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
-   logoutButton: {
+  logoutButton: {
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#d90429', // Color rojo para logout
+    backgroundColor: '#d90429',
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
@@ -459,10 +478,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
-  // ... el resto de tus estilos existentes
-  buttonDisabled: {
-    opacity: 0.6,
   },
   headerTitle: {
     fontSize: 20,
@@ -490,6 +505,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   createButtonText: {
     fontSize: 16,
@@ -509,16 +525,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 12,
+    margin: 16,
   },
   emptyText: {
     fontSize: 16,
     textAlign: 'center',
+    fontWeight: '600',
   },
   vacanteCard: {
     padding: 16,
     marginBottom: 16,
     borderRadius: 8,
     borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   vacanteHeader: {
     flexDirection: 'row',
@@ -641,4 +662,3 @@ const styles = StyleSheet.create({
 });
 
 export default EmployerDashboard;
-

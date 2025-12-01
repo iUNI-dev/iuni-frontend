@@ -4,6 +4,14 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image // Añadir Image
+  ,
+
+
+
+
+
+
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -264,12 +272,21 @@ const NotificacionesScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notificaciones</Text>
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
-        )}
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Notificaciones</Text>
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </View>
+        
+        {/* Logo en la parte superior derecha */}
+        <Image
+          source={require('../assets/images/logo.png')}
+          style={styles.headerLogo}
+          resizeMode="contain"
+        />
       </View>
 
       {/* Filtros */}
@@ -400,19 +417,28 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#212529',
     marginRight: 10,
+  },
+  headerLogo: {
+    width: 150,
+    height: 150,
   },
   badge: {
     backgroundColor: '#d90429',

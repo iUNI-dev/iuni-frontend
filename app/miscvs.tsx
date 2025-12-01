@@ -238,6 +238,15 @@ const MiscvsScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        {/* Logo arriba del texto */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
+        
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Mi CV</Text>
           <Text style={styles.headerSubtitle}>Información profesional completa</Text>
@@ -561,26 +570,44 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f0f0f0',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 60,
+    left: 24,
+    right: 24,
     alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerLogo: {
+    width: 100,
+    height: 200,
   },
   headerContent: {
     flex: 1,
+    marginTop: 150, // Espacio para el logo
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '300',
     color: '#1a1a1a',
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 15,
     color: '#8c8c8c',
     marginTop: 6,
     fontWeight: '400',
+    textAlign: 'center',
   },
   headerPhotoContainer: {
-    position: 'relative',
-    marginLeft: 20,
+    position: 'absolute',
+    top: 60,
+    right: 24,
+    width: 72,
+    alignItems: 'center',
   },
   headerPhoto: {
     width: 72,

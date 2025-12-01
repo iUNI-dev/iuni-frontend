@@ -440,13 +440,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   logoContainer: {
-    marginBottom: 24,
+    marginBottom: 0,
     alignItems: 'center',
     width: '100%',
   },
   logo: {
     width: 300,
-    height: 300,
+    height: 250,
   },
   formContainer: {
     padding: 32,

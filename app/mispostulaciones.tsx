@@ -1,25 +1,25 @@
 // app/mispostulaciones.tsx
 import { useRouter } from 'expo-router';
 import {
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    orderBy,
-    query,
-    where
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  where
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth, db } from '../src/firebase/firebase';
 
@@ -273,10 +273,21 @@ const MisPostulacionesScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mis Postulaciones</Text>
-        <Text style={styles.headerSubtitle}>
-          {stats.total} postulación{stats.total !== 1 ? 'es' : ''} en total
-        </Text>
+        {/* Logo de texto arriba del título */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/logo-texto.png')}
+            style={styles.headerLogoTexto}
+            resizeMode="contain"
+          />
+        </View>
+        
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Mis Postulaciones</Text>
+          <Text style={styles.headerSubtitle}>
+            {stats.total} postulación{stats.total !== 1 ? 'es' : ''} en total
+          </Text>
+        </View>
       </View>
 
       {/* Estadísticas rápidas */}
@@ -457,7 +468,7 @@ const MisPostulacionesScreen = () => {
   );
 };
 
-// Los estilos se mantienen igual...
+// ESTILOS ACTUALIZADOS CON LOGO DE TEXTO
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -476,21 +487,39 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 20,
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+    position: 'relative',
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  headerLogoTexto: {
+    width: 150, // Ancho más grande para el logo con texto
+    height: 110, // Alto adecuado para logo con texto
+  },
+  headerContent: {
+    marginTop: 70, // Espacio para el logo
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#212529',
+    textAlign: 'center',
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#6c757d',
     marginTop: 4,
+    textAlign: 'center',
   },
   statsContainer: {
     flexDirection: 'row',

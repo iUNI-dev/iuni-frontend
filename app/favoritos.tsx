@@ -1,26 +1,26 @@
 // app/favoritos.tsx
 import { useRouter } from 'expo-router';
 import {
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    orderBy,
-    query,
-    where
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  where
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth, db } from '../src/firebase/firebase';
 
@@ -218,10 +218,22 @@ const FavoritosScreen = () => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mis Favoritos</Text>
-        <Text style={styles.headerSubtitle}>
-          {favoritos.length} vacante{favoritos.length !== 1 ? 's' : ''} guardada{favoritos.length !== 1 ? 's' : ''}
-        </Text>
+        {/* CAMBIO 1: Logo de texto arriba del título */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../assets/images/logo-texto.png')}
+            style={styles.headerLogoTexto}
+            resizeMode="contain"
+          />
+        </View>
+        
+        {/* CAMBIO 2: Contenido del header con margen superior */}
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Mis Favoritos</Text>
+          <Text style={styles.headerSubtitle}>
+            {favoritos.length} vacante{favoritos.length !== 1 ? 's' : ''} guardada{favoritos.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
       </View>
 
       {/* Lista de Favoritos */}
@@ -318,6 +330,7 @@ const FavoritosScreen = () => {
   );
 };
 
+// CAMBIO 3: Estilos actualizados para el logo de texto
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -334,6 +347,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  // CAMBIO 4: Header modificado para incluir el logo
   header: {
     paddingHorizontal: 20,
     paddingTop: 60,
@@ -341,16 +355,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+    position: 'relative', // Necesario para posicionar el logo absolutamente
+  },
+  // CAMBIO 5: Contenedor del logo
+  logoContainer: {
+    position: 'absolute',
+    top: 10, // Posición desde la parte superior
+    left: 0,
+    right: 0,
+    alignItems: 'center', // Centra el logo horizontalmente
+    marginBottom: 16,
+  },
+  // CAMBIO 6: Estilo específico para el logo de texto
+  headerLogoTexto: {
+    width: 150, // Ancho adecuado para logo con texto
+    height: 150, // Alto adecuado para logo con texto
+  },
+  // CAMBIO 7: Contenido del header con margen para el logo
+  headerContent: {
+    marginTop: 40, // Espacio para que el texto quede debajo del logo
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#212529',
+    textAlign: 'center', // Centrado para mejor presentación
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#6c757d',
     marginTop: 4,
+    textAlign: 'center', // Centrado para mejor presentación
   },
   favoritosList: {
     flex: 1,

@@ -1,30 +1,31 @@
 // app/configuracion.tsx
 import { useRouter } from 'expo-router';
 import {
-    EmailAuthProvider,
-    reauthenticateWithCredential,
-    updatePassword
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword
 } from 'firebase/auth';
 import {
-    doc,
-    getDoc,
-    serverTimestamp,
-    updateDoc
+  doc,
+  getDoc,
+  serverTimestamp,
+  updateDoc
 } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { auth, db } from '../src/firebase/firebase';
 
@@ -522,10 +523,22 @@ const ConfiguracionScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - MODIFICADO: Logo a la derecha, texto a la izquierda */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Configuración</Text>
-        <Text style={styles.headerSubtitle}>Gestiona tu cuenta y preferencias</Text>
+        {/* Texto a la izquierda */}
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Configuración</Text>
+          <Text style={styles.headerSubtitle}>Gestiona tu cuenta y preferencias</Text>
+        </View>
+        
+        {/* Logo a la derecha */}
+        <View style={styles.headerRight}>
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+        </View>
       </View>
 
       {/* Navegación entre secciones */}
@@ -655,7 +668,7 @@ const ConfiguracionScreen = () => {
   );
 };
 
-// Los estilos se mantienen igual que en la versión anterior...
+// ESTILOS ACTUALIZADOS - Logo a la derecha, texto a la izquierda
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -672,13 +685,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  // MODIFICADO: Header con distribución horizontal
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 5,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e9ecef',
+  },
+  // NUEVO: Contenedor para el texto a la izquierda
+  headerLeft: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 24,
@@ -689,6 +710,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     marginTop: 4,
+  },
+  // NUEVO: Contenedor para el logo a la derecha
+  headerRight: {
+    marginLeft: 16,
+  },
+  // MODIFICADO: Estilo del logo (imagen simple)
+  headerLogo: {
+    width: 100,
+    height: 200,
   },
   navScroll: {
     backgroundColor: '#fff',
