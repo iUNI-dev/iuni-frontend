@@ -113,124 +113,210 @@ const RegisterDetails: React.FC = () => {
     });
   };
 
-  const handleSubmit = async () => {
-    // 🔹 VALIDACIONES MEJORADAS
-    if (!form.nombres.trim() || !form.apellidos.trim() || !form.email.trim()) {
-      Alert.alert('Campos requeridos', 'Completa nombre, apellido y email.');
+const handleSubmit = async () => {
+  // 🔹 VALIDACIONES MEJORADAS
+  if (!form.nombres.trim() || !form.apellidos.trim() || !form.email.trim()) {
+    Alert.alert('Campos requeridos', 'Completa nombre, apellido y email.');
+    return;
+  }
+
+  // 🔹 VALIDACIÓN DE EMAIL
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(form.email.trim())) {
+    Alert.alert('Email inválido', 'Por favor ingresa un email válido (ejemplo: usuario@gmail.com)');
+    return;
+  }
+
+  if (!isGoogleUser) {
+    if (!form.password.trim()) {
+      Alert.alert('Campo requerido', 'La contraseña es obligatoria.');
       return;
     }
-
-    if (!isGoogleUser) {
-      if (!form.password.trim()) {
-        Alert.alert('Campo requerido', 'La contraseña es obligatoria.');
-        return;
-      }
-      if (form.password.length < 6) {
-        Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
-        return;
-      }
-      if (form.password !== form.confirmPassword) {
-        Alert.alert('Contraseñas no coinciden', 'Las contraseñas deben ser iguales.');
-        return;
-      }
-    }
-
-    if (!captchaOk) {
-      Alert.alert('Validación', 'Por favor confirma que no eres un robot (captcha).');
+    if (form.password.length < 6) {
+      Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
       return;
     }
+    if (form.password !== form.confirmPassword) {
+      Alert.alert('Contraseñas no coinciden', 'Las contraseñas deben ser iguales.');
+      return;
+    }
+  }
 
-    setLoading(true);
-    try {
-      let userId: string;
-      let userEmail: string;
+  if (!captchaOk) {
+    Alert.alert('Validación', 'Por favor confirma que no eres un robot (captcha).');
+    return;
+  }
 
-      if (isGoogleUser) {
-        // 🔹 USUARIO GOOGLE (ya está autenticado)
-        const currentUser = auth.currentUser;
-        if (!currentUser) {
-          throw new Error('No hay usuario autenticado con Google');
+  setLoading(true);
+  try {
+    let userId: string;
+    let userEmail: string;
+    let userCreated = false;
+
+    if (isGoogleUser) {
+      // 🔹 USUARIO GOOGLE
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('No hay usuario autenticado con Google. Por favor inicia sesión con Google primero.');
+      }
+      userId = currentUser.uid;
+      userEmail = currentUser.email || form.email;
+      
+      // Verificar que el usuario de Google existe
+      console.log('✅ Usuario Google autenticado:', userId);
+      
+      // Actualizar displayName
+      await updateProfile(currentUser, {
+        displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`
+      });
+
+    } else {
+      // 🔹 USUARIO EMAIL - CREAR CUENTA NUEVA
+      console.log('🔹 Creando usuario con email/contraseña...');
+      
+      // IMPORTANTE: Normalizar email
+      const normalizedEmail = form.email.trim().toLowerCase();
+      
+      // Verificar si ya existe ANTES de crear
+      try {
+        const methods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
+        if (methods.length > 0) {
+          if (methods.includes('password')) {
+            Alert.alert('Cuenta existente', 'Este email ya está registrado. Intenta iniciar sesión.');
+            return;
+          } else if (methods.includes('google.com')) {
+            Alert.alert('Cuenta Google', 'Este email ya está registrado con Google. Usa "Ingresar con Google".');
+            return;
+          }
         }
-        userId = currentUser.uid;
-        userEmail = currentUser.email || form.email;
-        
-        // Actualizar displayName en Auth
-        await updateProfile(currentUser, {
-          displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`
-        });
+      } catch (methodsError) {
+        console.log('⚠️ No se pudo verificar métodos, continuando...');
+      }
 
-      } else {
-        // 🔹 USUARIO EMAIL (crear cuenta nueva)
-        console.log('🔹 Creando usuario con email/contraseña...');
+      try {
         const userCredential = await createUserWithEmailAndPassword(
           auth, 
-          form.email.toLowerCase(), 
+          normalizedEmail, 
           form.password
         );
+        
         const user = userCredential.user;
         userId = user.uid;
-        userEmail = user.email || form.email;
-
-        // Actualizar displayName en Auth
+        userEmail = user.email || normalizedEmail;
+        userCreated = true;
+        
+        console.log('✅ Usuario creado en Firebase Auth:', userId);
+        
+        // Actualizar displayName
         await updateProfile(user, {
           displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`
         });
-      }
-
-      console.log('🔹 Guardando datos en Firestore para:', userId);
-
-      let cvUrl = null;
-      if (cvFile) {
-        cvUrl = await uploadCvToStorage(userId);
-      }
-
-      // 🔹 PAYLOAD CON DATOS INICIALES
-      const payload = {
-        // Información personal básica
-        nombres: form.nombres.trim(),
-        apellidos: form.apellidos.trim(),
-        email: userEmail.toLowerCase(),
-        displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`,
         
-        // Información profesional
-        puestoDeseado: form.puestoDeseado.trim() || null,
-        departamento: form.departamento.trim() || null,
-        cvUrl: cvUrl || null,
+      } catch (createError: any) {
+        console.error('❌ Error creando usuario en Firebase Auth:', createError);
         
-        // Metadatos
-        provider: isGoogleUser ? 'google' : 'email',
-        userType: 'student',
-        registrationStep: 1, // 🔹 Paso 1 completado
-        registrationComplete: false,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        lastLogin: serverTimestamp(),
-      };
-
-      await setDoc(doc(db, 'users', userId), payload, { merge: true });
-
-      console.log('✅ Datos iniciales guardados, redirigiendo a student-profile...');
-      
-      // 🔹 REDIRECCIÓN A STUDENT-PROFILE
-      router.replace(`/student-profile?email=${encodeURIComponent(userEmail)}`);
-      
-    } catch (err: any) {
-      console.error('❌ Error guardando datos:', err);
-      
-      if (err.code === 'auth/email-already-in-use') {
-        Alert.alert('Email en uso', 'Este email ya está registrado. Intenta iniciar sesión.');
-      } else if (err.code === 'auth/weak-password') {
-        Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
-      } else if (err.code === 'auth/invalid-email') {
-        Alert.alert('Email inválido', 'El formato del email no es correcto.');
-      } else {
-        Alert.alert('Error', err.message || 'No se pudo completar el registro.');
+        // MANEJO DETALLADO DE ERRORES
+        switch (createError.code) {
+          case 'auth/email-already-in-use':
+            Alert.alert('Email en uso', 'Este email ya está registrado. Intenta iniciar sesión.');
+            return;
+          case 'auth/weak-password':
+            Alert.alert('Contraseña débil', 'La contraseña debe tener al menos 6 caracteres.');
+            return;
+          case 'auth/invalid-email':
+            Alert.alert('Email inválido', 'El formato del email no es correcto.');
+            return;
+          case 'auth/operation-not-allowed':
+            Alert.alert('Operación no permitida', 'El registro con email/contraseña no está habilitado en Firebase.');
+            return;
+          case 'auth/network-request-failed':
+            Alert.alert('Error de red', 'No se pudo conectar con el servidor. Verifica tu conexión.');
+            return;
+          default:
+            Alert.alert('Error de registro', createError.message || 'No se pudo crear la cuenta.');
+            return;
+        }
       }
-    } finally {
-      setLoading(false);
-      setUploadProgress(null);
     }
-  };
+
+    // 🔹 VERIFICAR QUE TENEMOS UN USER ID VÁLIDO
+    if (!userId) {
+      throw new Error('No se pudo obtener un ID de usuario válido.');
+    }
+
+    console.log('🔹 Guardando datos en Firestore para:', userId);
+
+    let cvUrl = null;
+    if (cvFile) {
+      try {
+        cvUrl = await uploadCvToStorage(userId);
+      } catch (uploadError) {
+        console.error('Error subiendo CV:', uploadError);
+        // Continuar sin CV
+      }
+    }
+
+    // 🔹 PAYLOAD CON DATOS INICIALES
+    const payload = {
+      // Información personal básica
+      nombres: form.nombres.trim(),
+      apellidos: form.apellidos.trim(),
+      email: userEmail.toLowerCase(),
+      displayName: `${form.nombres.trim()} ${form.apellidos.trim()}`,
+      
+      // Información profesional
+      puestoDeseado: form.puestoDeseado.trim() || null,
+      departamento: form.departamento.trim() || null,
+      cvUrl: cvUrl || null,
+      
+      // Metadatos
+      provider: isGoogleUser ? 'google' : 'email',
+      userType: 'student',
+      registrationStep: 1,
+      registrationComplete: false,
+      perfilCompletado: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      lastLogin: serverTimestamp(),
+    };
+
+    // Guardar en users
+    await setDoc(doc(db, 'users', userId), payload, { merge: true });
+    
+    // También guardar en students para consistencia
+    await setDoc(doc(db, 'students', userId), {
+      ...payload,
+      userId: userId,
+    }, { merge: true });
+
+    console.log('✅ Datos guardados en Firestore para usuario:', userId);
+    
+    // 🔹 VERIFICACIÓN FINAL
+    if (!isGoogleUser && userCreated) {
+      // Para usuarios email, verificar que pueden hacer login inmediatamente
+      try {
+        // Cerrar sesión y volver a iniciar para verificar
+        await auth.signOut();
+        const testLogin = await signInWithEmailAndPassword(auth, userEmail, form.password);
+        console.log('✅ Verificación de login exitosa:', testLogin.user.uid);
+      } catch (testError) {
+        console.warn('⚠️ Verificación de login falló:', testError);
+        // No bloquear, solo log
+      }
+    }
+    
+    // 🔹 REDIRECCIÓN A STUDENT-PROFILE
+    console.log('🔄 Redirigiendo a student-profile...');
+    router.replace(`/student-profile?email=${encodeURIComponent(userEmail)}&userId=${userId}`);
+    
+  } catch (err: any) {
+    console.error('❌ Error general en registro:', err);
+    Alert.alert('Error', err.message || 'No se pudo completar el registro.');
+  } finally {
+    setLoading(false);
+    setUploadProgress(null);
+  }
+};
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
