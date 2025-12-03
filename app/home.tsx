@@ -607,7 +607,7 @@ const styles = StyleSheet.create({
   // Welcome Section sobre el banner
   welcomeSection: {
     position: 'absolute',
-    top: 120,
+    top: 85,
     left: 20,
     zIndex: 10,
   },
